@@ -17,6 +17,7 @@ const ICON = {
   heartO: '<svg viewBox="0 0 24 24"><path d="M12 21 4.5 13.5a5 5 0 0 1 7.1-7.1l.4.4.4-.4a5 5 0 0 1 7.1 7.1L12 21Zm0-2.8 6.1-6.1a3 3 0 0 0-4.3-4.3L12 9.6l-1.8-1.8a3 3 0 0 0-4.3 4.3l6.1 6.1Z"/></svg>',
   edit: '<svg viewBox="0 0 24 24"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8L4 17.2ZM17.7 9.1a1 1 0 0 0 0-1.4l-1.4-1.4a1 1 0 0 0-1.4 0l-1.2 1.2 2.8 2.8 1.2-1.2Z"/></svg>',
   back: '<svg viewBox="0 0 24 24"><path d="m14 18-6-6 6-6 1.4 1.4-4.6 4.6 4.6 4.6L14 18Z"/></svg>',
+  whatsapp: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.2-.2-.4-.3Z"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24"><path d="M14 4h6v6l-2.3-2.3-3.3 3.3-1.4-1.4 3.3-3.3L14 4ZM4 18.6 16.3 6.3l1.4 1.4L5.4 20 4 18.6ZM14.6 13.2l1.4-1.4 1.7 1.7L20 11.2V17h-6l2.3-2.3-1.7-1.5ZM4 5.4 5.4 4l5.2 5.2-1.4 1.4L4 5.4Z"/></svg>',
 };
 
@@ -434,7 +435,20 @@ function wireMore() {
       <button class="btn small ghost" data-reset>Reset password</button>${u.id === S.me.id ? '' : '<button class="btn small danger" data-rm>Remove</button>'}</div>`).join('');
   };
   drawUsers();
-  const showPwdOnce = (who, pwd) => ($('#newPwd').innerHTML = `<p class="muted" style="margin:0">One-time password for <b>${esc(who)}</b> - send it to them; they'll set their own on first sign-in:</p><div class="secret">${esc(pwd)}</div>`);
+  const showPwdOnce = (who, pwd) => {
+    const msg = inviteMessage(who, pwd);
+    $('#newPwd').innerHTML = `<p class="muted" style="margin:0">One-time password for <b>${esc(who)}</b> - send it to them; they'll set their own on first sign-in:</p>
+      <div class="secret">${esc(pwd)}</div>
+      <div class="inline"><a class="btn small wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener noreferrer">${ICON.whatsapp} Send on WhatsApp</a>
+      <button class="btn small ghost" id="copyInvite">Copy message</button></div>`;
+    $('#copyInvite').onclick = async () => {
+      try { await navigator.clipboard.writeText(msg); toast('Message copied'); return; } catch { /* older phones: fall back below */ }
+      const ta = Object.assign(document.createElement('textarea'), { value: msg });
+      ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select();
+      const ok = document.execCommand('copy'); ta.remove();
+      toast(ok ? 'Message copied' : "Couldn't copy - use Send on WhatsApp instead");
+    };
+  };
   $('#addUser').onclick = async () => {
     try { const r = await api('/users', { method: 'POST', body: { username: $('#newUser').value } }); $('#newUser').value = ''; showPwdOnce(r.username, r.password); drawUsers(); }
     catch (err) { toast(err.message); }
@@ -450,6 +464,25 @@ function wireMore() {
     try { const r = await api('/rescan', { method: 'POST' }); await loadLibrary(); toast(`Rescan done: ${r.added} added, ${r.removed} removed`); render(); }
     finally { e.target.disabled = false; }
   };
+}
+
+// Ready-to-send invite, in WhatsApp's formatting (*bold*).
+function inviteMessage(username, password) {
+  return [
+    "🎵 *Narendra's Musicbox*, our family music collection",
+    '',
+    `Open: ${location.origin}`,
+    `Username: ${username}`,
+    `Password: ${password} (it will ask you to set your own the first time)`,
+    '',
+    '*Add it to your phone like an app:*',
+    '• *Android (Chrome):* tap ⋮ (top right) → Install app / Add to Home screen',
+    '• *iPhone:* open the link in Safari → tap Share ⎙ → Add to Home Screen',
+    '',
+    "Songs stream from the cloud, so they don't fill up your phone's storage. Tap ♡ to save favourites, and use the Upload tab to add your own MP3s.",
+    '',
+    'Happy Listening !!',
+  ].join('\n');
 }
 
 // One at a time, with progress - phones on mobile data don't like parallel big uploads.

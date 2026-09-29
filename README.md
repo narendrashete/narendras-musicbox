@@ -13,7 +13,8 @@ Personal music streaming app. It's a PWA, so it installs on Android ("Install ap
   extension). Title/artist come from the ID3 tags and exact duplicates are detected. To allow
   more formats later, add them to `ALLOWED_TYPES` in `server/config.js`.
 - **Users**: no self sign-up. The admin adds people under Upload → *People who can use the app*
-  and each gets a one-time password that they must change on first sign-in.
+  and each gets a one-time password that they must change on first sign-in. A **Send on WhatsApp**
+  button (plus **Copy message**) prepares the full invite: link, username, password and install steps.
 
 Stack: Node 22.13+ (24 on the server) + Express + SQLite (Node's built-in `node:sqlite`, so no
 native modules to compile), plain HTML/CSS/JS front end.

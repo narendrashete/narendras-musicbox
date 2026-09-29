@@ -41,6 +41,8 @@ label input:focus, .field:focus { border-color: var(--accent); }
 .btn.small { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
 .btn.danger { color: #ff7b8f; border: 1px solid rgba(255,123,143,.3); }
 .btn:disabled { opacity: .5; }
+.btn.wa { background: #25d366; color: #fff; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.btn.wa svg { width: 18px; height: 18px; }
 
 /* ---------- layout ---------- */
 #app { max-width: 920px; margin: 0 auto; }
