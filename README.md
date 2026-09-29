@@ -15,7 +15,8 @@ Personal music streaming app. It's a PWA, so it installs on Android ("Install ap
 - **Users**: no self sign-up. The admin adds people under Upload → *People who can use the app*
   and each gets a one-time password that they must change on first sign-in.
 
-Stack: Node 22 + Express + SQLite (`better-sqlite3`), plain HTML/CSS/JS front end.
+Stack: Node 22.13+ (24 on the server) + Express + SQLite (Node's built-in `node:sqlite`, so no
+native modules to compile), plain HTML/CSS/JS front end.
 
 ## Run
 

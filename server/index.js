@@ -109,11 +109,13 @@ app.patch('/api/songs/:id', requireAdmin, (req, res) => {
     if (!renameSong(req.params.id, { title, artist })) return res.status(404).json({ error: 'Not found' });
   }
   if (Array.isArray(cats)) {
-    db.transaction(() => {
+    db.exec('BEGIN');
+    try {
       db.prepare('DELETE FROM song_categories WHERE song_id = ?').run(req.params.id);
       const ins = db.prepare('INSERT OR IGNORE INTO song_categories (song_id, category_id) VALUES (?, ?)');
       cats.forEach((c) => ins.run(req.params.id, c));
-    })();
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
   }
   res.json(getSong(req.params.id, req.user.id));
 });

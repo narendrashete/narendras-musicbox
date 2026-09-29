@@ -177,7 +177,7 @@ Ok 'folder permissions locked down'
 # ---------------------------------------------------------------- 4. check the library is fully in OneDrive
 Step 'Library check'
 $size = & $Rclone size $Remote --json --config $Conf | ConvertFrom-Json
-$dbCount = [int](& "$NodeDir\node.exe" -e "const D=require('$($App -replace '\\','/')/node_modules/better-sqlite3');console.log(new D('$($Root -replace '\\','/')/data/musicbox.db').prepare('select count(*) n from songs').get().n)")
+$dbCount = [int](& "$NodeDir\node.exe" --no-warnings -e "const {DatabaseSync}=require('node:sqlite');console.log(new DatabaseSync('$($Root -replace '\\','/')/data/musicbox.db').prepare('select count(*) n from songs').get().n)")
 Info ("OneDrive has {0} files ({1:N1} GB); the song index has {2}" -f $size.count, ($size.bytes / 1GB), $dbCount)
 if ($size.count -lt $dbCount) {
     throw "OneDrive still has fewer songs than the index - the PC's OneDrive app hasn't finished uploading 'Narendras musicbox'. Wait for it to finish, then run this again."
