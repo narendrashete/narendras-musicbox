@@ -170,8 +170,11 @@ if (-not (Test-Path "$App\.env")) {
 
 # Only SYSTEM + Administrators can read the folder (it holds the OneDrive token and the JWT secret);
 # IIS only needs to read the tiny www folder.
-& icacls $Root /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' /T /C /Q | Out-Null
-& icacls "$Root\www" /grant 'IIS_IUSRS:(OI)(CI)RX' 'IUSR:(OI)(CI)RX' /T /C /Q | Out-Null
+# Lock the top folder only, then make everything inside inherit from it (/inheritance:r with /T would
+# strip every file's permissions, since (OI)(CI) grants only apply to folders).
+& icacls $Root /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' /C /Q | Out-Null
+& icacls "$Root\*" /reset /T /C /Q | Out-Null
+& icacls "$Root\www" /grant 'IIS_IUSRS:(OI)(CI)RX' 'IUSR:(OI)(CI)RX' /C /Q | Out-Null
 Ok 'folder permissions locked down'
 
 # ---------------------------------------------------------------- 4. check the library is fully in OneDrive
