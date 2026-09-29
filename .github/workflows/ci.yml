@@ -1,0 +1,55 @@
+# Every push/PR: install, syntax-check, boot the server against an empty library, and parse the
+# PowerShell deploy scripts. The Windows server's updater (deploy/windows-server/update.ps1) only
+# deploys commits on main where this passed.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Syntax check
+        run: for f in server/*.js scripts/*.js public/*.js; do node --check "$f"; done
+
+      - name: Smoke test
+        env:
+          JWT_SECRET: ci-only-not-a-real-secret
+          LIBRARY_DIR: ${{ runner.temp }}/library
+          DB_PATH: ${{ runner.temp }}/ci.db
+          PORT: 4300
+          HOST: 127.0.0.1
+        run: |
+          node server/index.js > server.log 2>&1 &
+          for i in $(seq 1 20); do curl -s -o /dev/null http://127.0.0.1:4300/ && break; sleep 1; done
+          check() { code=$(curl -s -o /dev/null -w '%{http_code}' "$@"); echo "$* -> $code"; echo "$code"; }
+          test "$(check http://127.0.0.1:4300/ | tail -1)" = 200
+          test "$(check http://127.0.0.1:4300/manifest.webmanifest | tail -1)" = 200
+          test "$(check http://127.0.0.1:4300/api/library | tail -1)" = 401
+          test "$(check -X POST -H 'Content-Type: application/json' -d '{"username":"x","password":"y"}' http://127.0.0.1:4300/api/login | tail -1)" = 401
+          cat server.log
+
+      - name: PowerShell scripts parse
+        shell: pwsh
+        run: |
+          $bad = 0
+          foreach ($f in Get-ChildItem deploy -Recurse -Filter *.ps1) {
+            $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs)
+            if ($errs) { $bad++; Write-Host "$($f.Name): $($errs.Message -join '; ')" }
+          }
+          exit $bad

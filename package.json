@@ -1,0 +1,26 @@
+{
+  "name": "narendras-musicbox",
+  "version": "1.0.0",
+  "description": "Narendra's Musicbox - personal music streaming PWA",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server/index.js",
+    "import": "node scripts/import.js",
+    "create-user": "node scripts/create-user.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^13.0.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.4.0",
+    "music-metadata": "^11.16.1"
+  }
+}

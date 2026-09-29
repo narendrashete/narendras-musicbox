@@ -1,0 +1,59 @@
+# Narendra's Musicbox
+
+Personal music streaming app. It's a PWA, so it installs on Android ("Install app") and iPhone
+(Safari → Share → "Add to Home Screen") from the same web address, with no app store involved.
+
+- **Library** lives in OneDrive: `OneDrive\Narendras musicbox\<Artist>\<Title>.mp3`
+- **Streaming**: songs play over HTTP Range requests, so the phone only buffers what it's
+  about to play and nothing is saved on the phone. The app shell is cached; songs never are.
+- **Favourites** per user. **Categories** (Comedy, Dance, Spiritual…) are created by the admin
+  and assigned from the ✎ button on any song. Admin can also fix a song's title/artist, and
+  the file moves to the matching folder.
+- **Upload**: any signed-in user can upload MP3s (the real file type is checked, not just the
+  extension). Title/artist come from the ID3 tags and exact duplicates are detected. To allow
+  more formats later, add them to `ALLOWED_TYPES` in `server/config.js`.
+- **Users**: no self sign-up. The admin adds people under Upload → *People who can use the app*
+  and each gets a one-time password that they must change on first sign-in.
+
+Stack: Node 22 + Express + SQLite (`better-sqlite3`), plain HTML/CSS/JS front end.
+
+## Run
+
+```bash
+npm install
+cp .env.example .env        # set LIBRARY_DIR and a long random JWT_SECRET
+npm run create-user -- narendra --admin   # prints a one-time password
+npm start                   # http://localhost:4300
+```
+
+- `npm run import -- "E:\music_legacy" "C:\path\to\more\music"` copies MP3s from any folders
+  into the library, organised by artist/title (the source files are left alone). Re-running it is safe.
+- MP3s dropped straight into the OneDrive folder are picked up on server start, or with
+  *Rescan OneDrive folder* on the Upload tab.
+- `data/musicbox.db` holds users, favourites and categories. Back it up. Don't put it inside
+  OneDrive (SQLite and sync clients don't mix).
+
+## Hosting
+
+Live at **https://musicbox.narendrashete.com** on a Windows Server (IIS) box:
+- `rclone mount` of OneDrive `Narendras musicbox` as drive `M:` (own OneDrive login, 3 GB cache),
+  so songs are pulled from OneDrive only when played.
+- Node on `127.0.0.1:4300`, behind an IIS site (URL Rewrite + ARR) with a Let's Encrypt cert from win-acme.
+- Both run as SYSTEM startup tasks `Musicbox-Mount` / `Musicbox-App`; logs in `C:\Musicbox\logs`.
+
+**CI/CD**: every push runs [CI](.github/workflows/ci.yml) (install, syntax check, a smoke test that
+boots the server, and a parse check of the PowerShell deploy scripts). On the server, the task
+`Musicbox-Update` ([update.ps1](deploy/windows-server/update.ps1)) checks GitHub every 5 minutes.
+When `main` has a new commit whose checks passed, it downloads it, installs it, restarts the app,
+and rolls back automatically if the new version doesn't start. It's pull-based: the server only
+makes outbound calls to GitHub, with no open ports and no GitHub runner on the box. The log is
+`C:\Musicbox\logs\update.log`, and `C:\Musicbox\deployed.txt` holds the live commit. So to ship
+a change, just push to `main`.
+
+First install (once): extract `dist/musicbox-deploy.zip` (code + `initial-data/musicbox.db`, built
+locally) into `C:\Musicbox` so you get `C:\Musicbox\app`. Then in an admin PowerShell run
+`deploy\windows-server\setup.ps1 -Check` (read-only), then `setup.ps1 -Email <you>`. It's safe to
+re-run, and it never overwrites the live DB in `C:\Musicbox\data`.
+
+---
+Developed by [Prime Computers](https://www.primecomputers.co.in)

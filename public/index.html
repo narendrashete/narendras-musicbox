@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Narendra's Musicbox</title>
+<meta name="theme-color" content="#14111f">
+<meta name="description" content="Narendra's personal music library">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Musicbox">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- Sign in -->
+<section id="login" class="screen center" hidden>
+  <form id="loginForm" class="card auth">
+    <img src="icons/icon.svg" alt="" class="auth-logo">
+    <h1>Narendra's Musicbox</h1>
+    <label>Username<input name="username" autocomplete="username" required></label>
+    <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+    <p class="error" id="loginError"></p>
+    <button class="btn primary">Sign in</button>
+  </form>
+  <div class="footer-credit"></div>
+</section>
+
+<!-- Forced / voluntary password change -->
+<section id="pwd" class="screen center" hidden>
+  <form id="pwdForm" class="card auth">
+    <h1>Set your password</h1>
+    <p class="muted" id="pwdHint">Choose a new password (at least 8 characters).</p>
+    <label>Current password<input name="current" type="password" autocomplete="current-password" required></label>
+    <label>New password<input name="next" type="password" autocomplete="new-password" minlength="8" required></label>
+    <p class="error" id="pwdError"></p>
+    <button class="btn primary">Save password</button>
+    <button type="button" class="btn ghost" id="pwdCancel" hidden>Cancel</button>
+  </form>
+</section>
+
+<!-- Main app -->
+<section id="app" class="screen" hidden>
+  <header class="topbar">
+    <div class="brand"><img src="icons/icon.svg" alt=""><span>Narendra's <b>Musicbox</b></span></div>
+    <div class="search"><svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.7 10.7l4.3 4.3 1.4-1.4-4.3-4.3A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/></svg>
+      <input id="search" type="search" placeholder="Search songs or artists" autocomplete="off"></div>
+  </header>
+
+  <main id="view"></main>
+
+  <!-- Mini player -->
+  <div id="mini" class="mini" hidden>
+    <div class="mini-progress"><i id="miniBar"></i></div>
+    <button class="mini-info" id="miniOpen"><span class="art" id="miniArt"></span>
+      <span class="txt"><b id="miniTitle"></b><small id="miniArtist"></small></span></button>
+    <button class="icon-btn" id="miniPlay" aria-label="Play/pause"></button>
+    <button class="icon-btn" id="miniNext" aria-label="Next"></button>
+  </div>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="songs"><svg viewBox="0 0 24 24"><path d="M9 18a3 3 0 1 1-2-2.8V5l12-2v11a3 3 0 1 1-2-2.8V7.3l-8 1.4V18Z"/></svg>Songs</button>
+    <button data-tab="artists"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z"/></svg>Artists</button>
+    <button data-tab="categories"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z"/></svg>Categories</button>
+    <button data-tab="favourites"><svg viewBox="0 0 24 24"><path d="M12 21 4.5 13.5a5 5 0 0 1 7.1-7.1l.4.4.4-.4a5 5 0 0 1 7.1 7.1L12 21Z"/></svg>Favourites</button>
+    <button data-tab="more"><svg viewBox="0 0 24 24"><path d="M11 16V7.8L7.4 11.4 6 10l6-6 6 6-1.4 1.4L13 7.8V16h-2Zm-6 4v-2h14v2H5Z"/></svg>Upload</button>
+  </nav>
+</section>
+
+<!-- Full player -->
+<section id="player" class="player" hidden>
+  <button class="icon-btn close" id="playerClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m12 15.4-6-6L7.4 8l4.6 4.6L16.6 8 18 9.4l-6 6Z"/></svg></button>
+  <div class="big-art" id="bigArt"></div>
+  <div class="now">
+    <div class="now-txt"><h2 id="pTitle"></h2><p id="pArtist"></p></div>
+    <button class="icon-btn fav" id="pFav" aria-label="Favourite"></button>
+  </div>
+  <input type="range" id="seek" min="0" max="100" step="0.1" value="0">
+  <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+  <div class="controls">
+    <button class="icon-btn" id="pShuffle" aria-label="Shuffle"><svg viewBox="0 0 24 24"><path d="M14 4h6v6l-2.3-2.3-3.3 3.3-1.4-1.4 3.3-3.3L14 4ZM4 18.6 16.3 6.3l1.4 1.4L5.4 20 4 18.6ZM14.6 13.2l1.4-1.4 1.7 1.7L20 11.2V17h-6l2.3-2.3-1.7-1.5ZM4 5.4 5.4 4l5.2 5.2-1.4 1.4L4 5.4Z"/></svg></button>
+    <button class="icon-btn" id="pPrev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 6h2v12H6V6Zm3.5 6L18 18V6l-8.5 6Z"/></svg></button>
+    <button class="play-big" id="pPlay" aria-label="Play/pause"></button>
+    <button class="icon-btn" id="pNext" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2V6ZM6 18l8.5-6L6 6v12Z"/></svg></button>
+    <button class="icon-btn" id="pRepeat" aria-label="Repeat"><svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7Zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4Z"/></svg></button>
+  </div>
+  <p class="buffer muted" id="pBuffer"></p>
+</section>
+
+<!-- Bottom sheet (edit song, dialogs) -->
+<div id="sheet" class="sheet-wrap" hidden><div class="sheet" id="sheetBody"></div></div>
+<div id="toast" class="toast" hidden></div>
+
+<audio id="audio" preload="none"></audio>
+
+<template id="creditTpl">
+  <span class="credit-label">Developed by</span>
+  <a class="credit" href="https://www.primecomputers.co.in" target="_blank" rel="noopener noreferrer">
+    <img class="credit-logo" src="prime-logo.png" alt="Prime Computers">
+  </a>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
