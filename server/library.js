@@ -5,7 +5,8 @@ import { parseFile } from 'music-metadata';
 import db from './db.js';
 import { LIBRARY_DIR, ALLOWED_TYPES } from './config.js';
 
-fs.mkdirSync(LIBRARY_DIR, { recursive: true });
+// existsSync first: mkdir on a drive root (the rclone mount M:\) throws EPERM even with recursive.
+if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
 
 // Detect the real type from the first bytes, so files with a wrong/missing extension still work.
 export function sniffType(file) {

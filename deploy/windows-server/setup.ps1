@@ -194,13 +194,13 @@ Stop-Ours
 $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 # Working directory is C:\Musicbox (not app\) so an update can replace app\ while the mount keeps running.
-function New-PsAction($file) { New-ScheduledTaskAction -Execute 'powershell.exe' -WorkingDirectory $Root -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$App\deploy\windows-server\$file`"" }
+function New-PsAction($file, $extra = '') { New-ScheduledTaskAction -Execute 'powershell.exe' -WorkingDirectory $Root -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$App\deploy\windows-server\$file`" $extra" }
 foreach ($t in @(@{ n = 'Musicbox-Mount'; f = 'run-mount.ps1' }, @{ n = 'Musicbox-App'; f = 'run-app.ps1' })) {
     Register-ScheduledTask -TaskName $t.n -Action (New-PsAction $t.f) -Trigger (New-ScheduledTaskTrigger -AtStartup) -Principal $principal -Settings $settings -Force | Out-Null
 }
 $every5 = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(2) -RepetitionInterval (New-TimeSpan -Minutes 5)
 $updSettings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 20) -MultipleInstances IgnoreNew -StartWhenAvailable
-Register-ScheduledTask -TaskName 'Musicbox-Update' -Action (New-PsAction "update.ps1 -Repo $Repo") -Trigger $every5 -Principal $principal -Settings $updSettings -Force | Out-Null
+Register-ScheduledTask -TaskName 'Musicbox-Update' -Action (New-PsAction 'update.ps1' "-Repo $Repo") -Trigger $every5 -Principal $principal -Settings $updSettings -Force | Out-Null
 if ((Test-Path "$App\REVISION") -and -not (Test-Path "$Root\deployed.txt")) { Copy-Item "$App\REVISION" "$Root\deployed.txt" }
 Ok 'auto-update task registered (checks GitHub every 5 minutes)'
 Start-ScheduledTask 'Musicbox-Mount'
