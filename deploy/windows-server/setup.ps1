@@ -50,7 +50,7 @@ function Find-Wacs {
     foreach ($p in "$env:ProgramFiles\win-acme\wacs.exe", 'C:\win-acme\wacs.exe', 'C:\Tools\win-acme\wacs.exe') { if (Test-Path $p) { return $p } }
     return $null
 }
-function Get-DnsIp { try { @(Resolve-DnsName $HostName -Type A -ErrorAction Stop | Where-Object IPAddress | ForEach-Object IPAddress) } catch { @() } }
+function Get-DnsIp { try { @(Resolve-DnsName $HostName -Type A -DnsOnly -ErrorAction Stop | Where-Object { $_.Section -eq 'Answer' -and $_.IPAddress } | ForEach-Object IPAddress) } catch { @() } }
 function Get-GitHubAsset($repo, $pattern) {
     $rel = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ 'User-Agent' = 'musicbox-setup' }
     ($rel.assets | Where-Object name -match $pattern | Select-Object -First 1).browser_download_url
@@ -226,14 +226,21 @@ Step 'IIS'
 Import-Module WebAdministration
 Copy-Item "$Here\web.config" "$Root\www\web.config" -Force
 Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter system.webServer/proxy -Name enabled -Value $true
-Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter system.webServer/proxy -Name timeout -Value '00:10:00'   # slow mobile uploads
+# ARR's timeout is server-wide (other proxied sites share it): only ever raise it, for slow phone uploads.
+$oldTimeout = [TimeSpan](Get-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter system.webServer/proxy -Name timeout).Value
+if ($oldTimeout -lt [TimeSpan]'00:10:00') {
+    Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter system.webServer/proxy -Name timeout -Value '00:10:00'
+    Info "ARR proxy timeout raised from $oldTimeout to 00:10:00"
+}
 if (-not (Test-Path "IIS:\AppPools\Musicbox")) {
     New-WebAppPool Musicbox | Out-Null
     Set-ItemProperty IIS:\AppPools\Musicbox -Name managedRuntimeVersion -Value ''
 }
 if (-not (Get-Website -Name $SiteName)) {
-    New-Website -Name $SiteName -PhysicalPath "$Root\www" -HostHeader $HostName -Port 80 -ApplicationPool Musicbox | Out-Null
-    Ok "site $SiteName created"
+    # Bind to the server's own IP like the other sites on this box (falls back to all addresses).
+    $bindIp = if ((Get-NetIPAddress -AddressFamily IPv4).IPAddress -contains $PublicIp) { $PublicIp } else { '*' }
+    New-Website -Name $SiteName -PhysicalPath "$Root\www" -HostHeader $HostName -IPAddress $bindIp -Port 80 -ApplicationPool Musicbox | Out-Null
+    Ok "site $SiteName created on ${bindIp}:80"
 } else { Ok "site $SiteName exists" }
 $allowed = Get-WebConfiguration -PSPath 'MACHINE/WEBROOT/APPHOST' -Location $SiteName -Filter system.webServer/rewrite/allowedServerVariables/add
 if (-not ($allowed | Where-Object name -eq 'HTTP_X_FORWARDED_PROTO')) {
