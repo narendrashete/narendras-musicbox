@@ -1,5 +1,5 @@
 // Caches only the app shell so it opens instantly. Songs are never cached - they stream on demand.
-const CACHE = 'musicbox-v2';
+const CACHE = 'musicbox-v3';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'prime-logo.png'];
 
 self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));

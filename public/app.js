@@ -378,8 +378,8 @@ function newCategory() {
 function moreView() {
   return `<div class="view-head"><h2>Upload songs</h2></div>
   <div class="panel">
-    <label class="drop" id="drop"><input type="file" id="files" accept=".mp3,audio/mpeg" multiple>
-      <b>Tap to choose MP3 files</b><br><small>or drag them here · title &amp; artist are read from the file</small></label>
+    <label class="drop" id="drop"><input type="file" id="files" accept=".mp3,.m4a,audio/mpeg,audio/mp4" multiple>
+      <b>Tap to choose MP3 or M4A files</b><br><small>or drag them here · title &amp; artist are read from the file</small></label>
     <ul class="uploads" id="uploads"></ul>
   </div>
   ${S.me.isAdmin ? `
@@ -493,7 +493,7 @@ async function uploadFiles(files) {
     li.innerHTML = `<span>${esc(file.name)}</span><div class="bar"><i></i></div><span class="st">Waiting…</span>`;
     ul.prepend(li);
     const st = $('.st', li), bar = $('.bar i', li);
-    if (!/\.mp3$/i.test(file.name)) { st.textContent = 'Only MP3 files are allowed'; st.className = 'st bad'; continue; }
+    if (!/\.(mp3|m4a)$/i.test(file.name)) { st.textContent = 'Only MP3 or M4A files are allowed'; st.className = 'st bad'; continue; }
     try {
       const r = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest(), fd = new FormData();

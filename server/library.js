@@ -10,10 +10,11 @@ if (!fs.existsSync(LIBRARY_DIR)) fs.mkdirSync(LIBRARY_DIR, { recursive: true });
 
 // Detect the real type from the first bytes, so files with a wrong/missing extension still work.
 export function sniffType(file) {
-  const b = Buffer.alloc(3);
+  const b = Buffer.alloc(12);
   const fd = fs.openSync(file, 'r');
-  try { fs.readSync(fd, b, 0, 3, 0); } finally { fs.closeSync(fd); }
+  try { fs.readSync(fd, b, 0, 12, 0); } finally { fs.closeSync(fd); }
   if (b.toString('latin1') === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return '.mp3';
+  if (b.toString('latin1', 4, 8) === 'ftyp') return '.m4a'; // often an AAC file renamed to .mp3
   return null;
 }
 
@@ -98,7 +99,7 @@ function canonicalArtist(name) {
  */
 export async function addFile(src, { mode = 'copy', uploadedBy = null, overrides = {} } = {}) {
   const ext = sniffType(src);
-  if (!ext || !ALLOWED_TYPES[ext]) throw Object.assign(new Error('Only MP3 files are allowed'), { status: 400 });
+  if (!ext || !ALLOWED_TYPES[ext]) throw Object.assign(new Error('Only MP3 or M4A files are allowed'), { status: 400 });
 
   const hash = await hashFile(src);
   const existing = db.prepare('SELECT * FROM songs WHERE hash = ?').get(hash);

@@ -15,6 +15,6 @@ export const DB_PATH = process.env.DB_PATH || path.join(APP_DIR, 'data', 'musicb
 export const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) throw new Error('JWT_SECRET missing - copy .env.example to .env and set it');
 
-// Only MP3 for now. Adding a format later = add its extension + mime type here.
-export const ALLOWED_TYPES = { '.mp3': 'audio/mpeg' };
+// Adding a format = add its extension + mime type here (and teach sniffType in library.js to spot it).
+export const ALLOWED_TYPES = { '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4' };
 export const MAX_UPLOAD_MB = 60;

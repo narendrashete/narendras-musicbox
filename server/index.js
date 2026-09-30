@@ -91,7 +91,7 @@ const upload = multer({
 });
 
 app.post('/api/songs', upload.single('file'), wrap(async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Only MP3 files are allowed' });
+  if (!req.file) return res.status(400).json({ error: 'Only MP3 or M4A files are allowed' });
   try {
     const { song, duplicate } = await addFile(req.file.path, {
       mode: 'move', uploadedBy: req.user.id, overrides: { title: req.body.title, artist: req.body.artist },
