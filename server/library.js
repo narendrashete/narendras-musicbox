@@ -13,7 +13,7 @@ export function sniffType(file) {
   const b = Buffer.alloc(12);
   const fd = fs.openSync(file, 'r');
   try { fs.readSync(fd, b, 0, 12, 0); } finally { fs.closeSync(fd); }
-  if (b.toString('latin1') === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return '.mp3';
+  if (b.toString('latin1', 0, 3) === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return '.mp3';
   if (b.toString('latin1', 4, 8) === 'ftyp') return '.m4a'; // often an AAC file renamed to .mp3
   return null;
 }
