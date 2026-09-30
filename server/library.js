@@ -97,7 +97,7 @@ function canonicalArtist(name) {
  * (used for uploads). `overrides` lets the uploader correct title/artist.
  * Returns { song, duplicate }.
  */
-export async function addFile(src, { mode = 'copy', uploadedBy = null, overrides = {} } = {}) {
+export async function addFile(src, { mode = 'copy', uploadedBy = null, overrides = {}, originalName = null } = {}) {
   const ext = sniffType(src);
   if (!ext || !ALLOWED_TYPES[ext]) throw Object.assign(new Error('Only MP3 or M4A files are allowed'), { status: 400 });
 
@@ -109,7 +109,9 @@ export async function addFile(src, { mode = 'copy', uploadedBy = null, overrides
   }
 
   const tags = await readTags(src);
-  const title = tidy(overrides.title) || tags.title;
+  // An uploaded file sits under a temp name, and some tags hold a hash instead of a title: use the real file name then.
+  const junkTitle = /^[0-9a-f]{16,}$/i.test(tags.title);
+  const title = tidy(overrides.title) || (originalName && (junkTitle || tags.title === titleFromFilename(src)) ? titleFromFilename(originalName) : tags.title);
   const artistInfo = overrides.artist ? cleanArtists(overrides.artist) : tags;
   const artist = canonicalArtist(artistInfo.artist);
   const rel = destPathFor(artist, title, ext);

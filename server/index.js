@@ -94,7 +94,7 @@ app.post('/api/songs', upload.single('file'), wrap(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Only MP3 or M4A files are allowed' });
   try {
     const { song, duplicate } = await addFile(req.file.path, {
-      mode: 'move', uploadedBy: req.user.id, overrides: { title: req.body.title, artist: req.body.artist },
+      mode: 'move', uploadedBy: req.user.id, originalName: Buffer.from(req.file.originalname, 'latin1').toString('utf8'), overrides: { title: req.body.title, artist: req.body.artist },
     });
     res.status(duplicate ? 200 : 201).json({ song: getSong(song.id, req.user.id), duplicate });
   } finally {
