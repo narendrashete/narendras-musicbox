@@ -70,6 +70,7 @@ function dailyChart(daily, days) {
 
 function render(d) {
   const active = d.users.filter((u) => status(u)[0] === 'active').length;
+  const changed = d.users.filter((u) => !u.must_change_password).length;
   const stuck = d.users.filter((u) => trouble(u).length).length;
   const probCount = d.problems.filter((p) => !p.kind.startsWith('login_')).length;
 
@@ -78,6 +79,7 @@ function render(d) {
     return `<tr>
       <td><b>${esc(u.username)}</b>${u.is_admin ? ' <small class="dim">admin</small>' : ''}${trouble(u).map(([m, bad]) => `<span class="flag${bad ? ' bad' : ''}">${esc(m)}</span>`).join('')}</td>
       <td><span class="pill ${cls}">${label}</span></td>
+      <td>${u.must_change_password ? '<span class="pill never">Not changed</span>' : '<span class="pill active">Changed</span>'}</td>
       <td>${ago(u.last_seen || u.last_login)}<br><small>${u.last_login ? `signed in ${ago(u.last_login)}` : ''}</small></td>
       <td class="num">${num(u.plays)}<br><small>${u.seconds ? hours(u.seconds) : ''}</small></td>
       <td>${u.last_song ? esc(u.last_song) : '<span class="dim">—</span>'}</td>
@@ -101,6 +103,7 @@ function render(d) {
   $('#main').innerHTML = `
   <div class="kpis">
     <div class="kpi"><b>${active}<small class="dim"> / ${d.totals.users}</small></b><span>users active in last 3 days</span></div>
+    <div class="kpi ${changed < d.totals.users ? 'warn' : ''}"><b>${changed}<small class="dim"> / ${d.totals.users}</small></b><span>have set their own password</span></div>
     <div class="kpi"><b>${num(d.totals.plays)}</b><span>songs played (${d.days} days)</span></div>
     <div class="kpi"><b>${hours(d.totals.seconds)}</b><span>listening time</span></div>
     <div class="kpi"><b>${num(d.totals.uploads)}</b><span>songs uploaded by users</span></div>
@@ -109,7 +112,7 @@ function render(d) {
   </div>
 
   <section><h2>Users</h2><p class="sub">Who is using the app, and who may be stuck. A play counts after 20 seconds of listening.</p>
-    <div class="tbl-wrap"><table><thead><tr><th>User</th><th>Status</th><th>Last seen</th><th class="num">Plays (${d.days}d)</th><th>Last song played</th><th class="num">Uploads</th><th class="num">Favs</th></tr></thead><tbody>${userRows}</tbody></table></div></section>
+    <div class="tbl-wrap"><table><thead><tr><th>User</th><th>Status</th><th>Password</th><th>Last seen</th><th class="num">Plays (${d.days}d)</th><th>Last song played</th><th class="num">Uploads</th><th class="num">Favs</th></tr></thead><tbody>${userRows}</tbody></table></div></section>
 
   <div class="grid2">
     <section><h2>Most listened songs</h2><p class="sub">Last ${d.days} days</p>
