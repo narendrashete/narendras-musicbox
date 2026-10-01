@@ -428,7 +428,8 @@ function moreView() {
     <div class="inline"><input class="field" id="newUser" placeholder="New username" autocapitalize="none"><button class="btn small primary" id="addUser">Add</button></div>
     <div id="newPwd"></div></div>
   <div class="panel"><h3>Usage dashboard</h3><p class="muted" style="margin:0">Who is active, what's being played, uploads and trouble.</p>
-    <a class="btn small primary" href="admin.html" style="align-self:flex-start;text-decoration:none">Open dashboard</a></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn small primary" href="admin.html" style="text-decoration:none">Open dashboard</a>
+    <a class="btn small ghost" href="health.html" style="text-decoration:none">Health check</a></div></div>
   <div class="panel"><h3>Library</h3><p class="muted" style="margin:0">Songs: ${S.songs.length}. If you copied MP3s straight into the OneDrive folder, rescan to pick them up.</p>
     <button class="btn small ghost" id="rescan" style="align-self:flex-start">Rescan OneDrive folder</button></div>` : ''}
   <div class="panel"><h3>Account</h3><p class="muted" style="margin:0">Signed in as <b>${esc(S.me.username)}</b>${S.me.isAdmin ? ' (admin)' : ''}</p>
