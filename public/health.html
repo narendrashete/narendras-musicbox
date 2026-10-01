@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Musicbox Health</title>
+<meta name="theme-color" content="#14111f">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body class="adm">
+<header class="adm-top">
+  <a class="back" href="./" aria-label="Back to the app">&larr; Musicbox</a>
+  <h1>Health check</h1>
+</header>
+<main id="main" class="adm-main"><p class="muted">Checking every song file… this can take a little while.</p></main>
+<script>
+'use strict';
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const row = (ok, label, detail) => `<div class="panel" style="margin:10px 0"><b>${ok ? '✅' : '❌'} ${esc(label)}</b><div class="muted" style="margin-top:4px;word-break:break-word">${detail}</div></div>`;
+fetch('/api/admin/health').then(async (r) => {
+  if (r.status === 401) return location.href = './';
+  if (!r.ok) throw new Error(r.status === 403 ? 'Admin only' : `Server said ${r.status}`);
+  const h = await r.json();
+  const s = h.songs, t = h.readTest;
+  let html = row(true, 'Server is running', `Node ${esc(h.node)} · up ${h.uptimeMin} min · ${esc(h.time)}`);
+  html += row(h.folder.ok, 'Library folder readable', h.folder.ok ? `${esc(h.libraryDir)} · ${h.folder.entries} items at top level` : `${esc(h.libraryDir)}<br>${esc(h.folder.error)}`);
+  html += row(s.missing === 0 && s.total > 0, 'Song files', `${s.ok} of ${s.total} found${s.missing ? ` · <b>${s.missing} missing or unreadable</b>` : ''}`);
+  if (s.failures.length) html += `<div class="panel"><b>First failures</b>${s.failures.map((f) => `<div class="muted" style="margin-top:6px;word-break:break-word">${esc(f.title)}<br>${esc(f.path)} — <b>${esc(f.error)}</b></div>`).join('')}</div>`;
+  html += row(!!t?.ok, 'Read test (one song)', t ? (t.ok ? `"${esc(t.title)}" · read ${t.bytes} bytes in ${t.ms} ms · detected type ${esc(t.type || 'unknown')}` : `"${esc(t.title)}" — ${esc(t.error)}`) : 'No readable song to test');
+  document.getElementById('main').innerHTML = html;
+}).catch((e) => { document.getElementById('main').innerHTML = row(false, 'Could not run the check', esc(e.message)); });
+</script>
+</body>
+</html>

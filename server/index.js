@@ -193,6 +193,43 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- admin: health check (is the OneDrive folder readable? which song files are missing?) ----------
+app.get('/api/admin/health', requireAdmin, wrap(async (req, res) => {
+  const out = {
+    time: new Date().toISOString(), node: process.version, uptimeMin: Math.round(process.uptime() / 60),
+    libraryDir: LIBRARY_DIR, folder: { ok: false }, songs: { total: 0, ok: 0, missing: 0, failures: [] }, readTest: null,
+  };
+  try {
+    out.folder = { ok: true, entries: fs.readdirSync(LIBRARY_DIR).length };
+  } catch (e) { out.folder = { ok: false, error: `${e.code || ''} ${e.message}`.trim() }; }
+
+  const rows = db.prepare('SELECT id, title, rel_path FROM songs').all();
+  out.songs.total = rows.length;
+  for (let i = 0; i < rows.length; i += 20) { // small batches so a slow network drive isn't hit all at once
+    await Promise.all(rows.slice(i, i + 20).map(async (r) => {
+      try { await fs.promises.access(absPath(r.rel_path), fs.constants.R_OK); out.songs.ok++; }
+      catch (e) {
+        out.songs.missing++;
+        if (out.songs.failures.length < 15) out.songs.failures.push({ id: r.id, title: r.title, path: r.rel_path, error: e.code || e.message });
+      }
+    }));
+  }
+
+  // Actually read bytes from one song, the way a play would.
+  const first = rows.find((r) => fs.existsSync(absPath(r.rel_path)));
+  if (first) {
+    const t0 = Date.now();
+    try {
+      const fd = await fs.promises.open(absPath(first.rel_path), 'r');
+      const buf = Buffer.alloc(65536);
+      const { bytesRead } = await fd.read(buf, 0, buf.length, 0);
+      await fd.close();
+      out.readTest = { ok: true, title: first.title, bytes: bytesRead, ms: Date.now() - t0, type: sniffType(absPath(first.rel_path)) };
+    } catch (e) { out.readTest = { ok: false, title: first.title, error: `${e.code || ''} ${e.message}`.trim() }; }
+  }
+  res.json(out);
+}));
+
 // ---------- admin: usage dashboard ----------
 app.get('/api/admin/stats', requireAdmin, (req, res) => {
   const days = [7, 30, 90, 365].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
