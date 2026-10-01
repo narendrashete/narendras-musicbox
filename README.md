@@ -3,7 +3,7 @@
 Personal music streaming app. It's a PWA, so it installs on Android ("Install app") and iPhone
 (Safari → Share → "Add to Home Screen") from the same web address, with no app store involved.
 
-- **Library** lives in OneDrive: `OneDrive\Narendras musicbox\<Artist>\<Title>.mp3`
+- **Library** lives on the server's own disk (`C:\Musicbox\library\<Artist>\<Title>.mp3`) and is backed up to OneDrive (`Narendras musicbox`) every 15 minutes
 - **Streaming**: songs play over HTTP Range requests, so the phone only buffers what it's
   about to play and nothing is saved on the phone. The app shell is cached; songs never are.
 - **Favourites** per user. **Categories** (Comedy, Dance, Spiritual…) are created by the admin
@@ -32,7 +32,7 @@ npm start                   # http://localhost:4300
 
 - `npm run import -- "E:\music_legacy" "C:\path\to\more\music"` copies MP3s from any folders
   into the library, organised by artist/title (the source files are left alone). Re-running it is safe.
-- MP3s dropped straight into the OneDrive folder are picked up on server start, or with
+- MP3s dropped straight into the library folder are picked up on server start, or with
   *Rescan OneDrive folder* on the Upload tab.
 - `data/musicbox.db` holds users, favourites and categories. Back it up. Don't put it inside
   OneDrive (SQLite and sync clients don't mix).
@@ -40,8 +40,15 @@ npm start                   # http://localhost:4300
 ## Hosting
 
 Live at **https://musicbox.narendrashete.com** on a Windows Server (IIS) box:
-- `rclone mount` of OneDrive `Narendras musicbox` as drive `M:` (own OneDrive login, 3 GB cache),
-  so songs are pulled from OneDrive only when played.
+- Songs are stored in `C:\Musicbox\library` on the server, so playback never depends on OneDrive.
+  Task `Musicbox-Sync` ([run-sync.ps1](deploy/windows-server/run-sync.ps1)) copies new songs to the OneDrive
+  folder `Narendras musicbox` every 15 minutes (copy only, it never deletes). It uses its own rclone login,
+  which can expire; if so the backup stops but playback is unaffected. The admin **Health check** page
+  (`/health.html`) shows the last backup result, free disk space and any missing song files.
+- Moving an existing install from the old OneDrive mount (`M:`): run
+  [migrate-to-local.ps1](deploy/windows-server/migrate-to-local.ps1) once as administrator. `setup.ps1` is the
+  original installer and still sets up the `M:` mount, so don't re-run it on a migrated server.
+- To add songs: use the Upload tab, or copy MP3s into `C:\Musicbox\library` and press *Rescan* on the Upload tab.
 - Node on `127.0.0.1:4300`, behind an IIS site (URL Rewrite + ARR) with a Let's Encrypt cert from win-acme.
 - Both run as SYSTEM startup tasks `Musicbox-Mount` / `Musicbox-App`; logs in `C:\Musicbox\logs`.
 

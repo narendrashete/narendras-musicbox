@@ -29,6 +29,12 @@ fetch('/api/admin/health').then(async (r) => {
   html += row(h.folder.ok, 'Library folder readable', h.folder.ok ? `${esc(h.libraryDir)} · ${h.folder.entries} items at top level` : `${esc(h.libraryDir)}<br>${esc(h.folder.error)}`);
   html += row(s.missing === 0 && s.total > 0, 'Song files', `${s.ok} of ${s.total} found${s.missing ? ` · <b>${s.missing} missing or unreadable</b>` : ''}`);
   if (s.failures.length) html += `<div class="panel"><b>First failures</b>${s.failures.map((f) => `<div class="muted" style="margin-top:6px;word-break:break-word">${esc(f.title)}<br>${esc(f.path)} — <b>${esc(f.error)}</b></div>`).join('')}</div>`;
+  if (h.disk) html += row(h.disk.freeGB > 2, 'Server disk space', `${h.disk.freeGB} GB free of ${h.disk.totalGB} GB`);
+  const b = h.backup;
+  const stale = b && b.ageMin > 60;
+  html += b
+    ? row(b.ok && !stale, 'OneDrive backup', b.ok ? `Last ran ${b.ageMin < 90 ? `${b.ageMin} min` : `${Math.round(b.ageMin / 60)} hr`} ago${stale ? ' - <b>overdue, the backup task may have stopped</b>' : ' and succeeded'}` : `Last run <b>failed</b>${b.error ? `:<br>${esc(b.error)}` : ''}${/invalid_grant|token/i.test(b.error) ? '<br><b>The OneDrive login has expired - run: rclone config reconnect musicbox:</b>' : ''}`)
+    : row(false, 'OneDrive backup', 'No backup has run yet (this is normal until the Musicbox-Sync task is set up)');
   html += row(!!t?.ok, 'Read test (one song)', t ? (t.ok ? `"${esc(t.title)}" · read ${t.bytes} bytes in ${t.ms} ms · detected type ${esc(t.type || 'unknown')}` : `"${esc(t.title)}" — ${esc(t.error)}`) : 'No readable song to test');
   document.getElementById('main').innerHTML = html;
 }).catch((e) => { document.getElementById('main').innerHTML = row(false, 'Could not run the check', esc(e.message)); });
