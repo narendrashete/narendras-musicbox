@@ -6,7 +6,7 @@ import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import db from './db.js';
 import { PORT, HOST, APP_DIR, ALLOWED_TYPES, MAX_UPLOAD_MB, LIBRARY_DIR } from './config.js';
-import { addFile, absPath, renameSong, scanLibrary } from './library.js';
+import { addFile, absPath, renameSong, scanLibrary, sniffType } from './library.js';
 import {
   requireUser, requireAdmin, setSession, clearSession, publicUser,
   hashPassword, checkPassword, randomPassword,
@@ -78,9 +78,13 @@ app.get('/api/library', (req, res) => {
 app.get('/api/songs/:id/stream', (req, res) => {
   const song = db.prepare('SELECT rel_path, mime FROM songs WHERE id = ?').get(req.params.id);
   if (!song) return res.status(404).end();
-  res.sendFile(absPath(song.rel_path), {
+  const file = absPath(song.rel_path);
+  // Trust the file's bytes over its name: an AAC/M4A file named .mp3 served as audio/mpeg won't play on iPhone/Safari.
+  let mime = song.mime;
+  try { mime = ALLOWED_TYPES[sniffType(file)] || mime; } catch {}
+  res.sendFile(file, {
     acceptRanges: true, dotfiles: 'allow',
-    headers: { 'Content-Type': song.mime, 'Cache-Control': 'private, no-store' },
+    headers: { 'Content-Type': mime, 'Cache-Control': 'private, no-store' },
   }, (err) => { if (err && !res.headersSent) res.status(err.statusCode || 500).end(); });
 });
 

@@ -319,7 +319,11 @@ audio.addEventListener('playing', () => clearTimeout(stallTimer));
 audio.addEventListener('play', syncPlayerUi);
 audio.addEventListener('pause', syncPlayerUi);
 audio.addEventListener('ended', () => { flushListen(); next(true); });
+let retriedId = null;
 audio.addEventListener('error', () => {
+  const cur = S.queue[S.qi];
+  // One quiet retry first: flaky mobile networks / a slow OneDrive fetch often succeed the second time.
+  if (audio.src && retriedId !== cur) { retriedId = cur; const t = audio.currentTime; audio.load(); audio.currentTime = t; audio.play().catch(() => {}); return; }
   if (audio.src) { toast("Couldn't play this song - skipping"); reportProblem('play_error', S.queue[S.qi], audio.error?.message || `media error ${audio.error?.code}`); }
   setTimeout(() => next(true), 800);
 });
