@@ -5,7 +5,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import db from './db.js';
-import { PORT, HOST, APP_DIR, ALLOWED_TYPES, MAX_UPLOAD_MB, LIBRARY_DIR } from './config.js';
+import { PORT, HOST, APP_DIR, ALLOWED_TYPES, MAX_UPLOAD_MB, LIBRARY_DIR, DB_PATH } from './config.js';
 import { addFile, absPath, renameSong, scanLibrary, sniffType } from './library.js';
 import {
   requireUser, requireAdmin, setSession, clearSession, publicUser,
@@ -202,6 +202,18 @@ app.get('/api/admin/health', requireAdmin, wrap(async (req, res) => {
   try {
     out.folder = { ok: true, entries: fs.readdirSync(LIBRARY_DIR).length };
   } catch (e) { out.folder = { ok: false, error: `${e.code || ''} ${e.message}`.trim() }; }
+
+  try {
+    const st = fs.statfsSync(LIBRARY_DIR);
+    out.disk = { freeGB: +(st.bavail * st.bsize / 1e9).toFixed(1), totalGB: +(st.blocks * st.bsize / 1e9).toFixed(1) };
+  } catch {}
+
+  // The OneDrive backup job (Musicbox-Sync) writes this file after every run.
+  const syncFile = process.env.SYNC_STATUS_FILE || path.join(path.dirname(DB_PATH), '..', 'logs', 'sync-status.json');
+  try {
+    const b = JSON.parse(fs.readFileSync(syncFile, 'utf8').replace(/^\uFEFF/, ''));
+    out.backup = { ok: !!b.ok, time: b.time, ageMin: Math.round((Date.now() - Date.parse(b.time)) / 60000), error: b.error || '' };
+  } catch { out.backup = null; }
 
   const rows = db.prepare('SELECT id, title, rel_path FROM songs').all();
   out.songs.total = rows.length;

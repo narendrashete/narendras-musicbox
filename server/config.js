@@ -8,8 +8,8 @@ dotenv.config({ path: path.join(APP_DIR, '.env') });
 
 export const PORT = Number(process.env.PORT || 4300);
 export const HOST = process.env.HOST || '0.0.0.0'; // 127.0.0.1 behind a reverse proxy
-// The music library folder. On this PC it's the OneDrive-synced folder; on a server it's an
-// rclone mount of the same OneDrive folder. The app only ever sees a plain folder.
+// The music library folder. On a PC it can be the OneDrive-synced folder; on the server it's a plain
+// local folder that a scheduled rclone job backs up to OneDrive. The app only ever sees a plain folder.
 export const LIBRARY_DIR = process.env.LIBRARY_DIR || path.join(os.homedir(), 'OneDrive', 'Narendras musicbox');
 export const DB_PATH = process.env.DB_PATH || path.join(APP_DIR, 'data', 'musicbox.db');
 export const JWT_SECRET = process.env.JWT_SECRET;
