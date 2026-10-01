@@ -46,6 +46,32 @@ CREATE TABLE IF NOT EXISTS favorites (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, song_id)
 );
+CREATE TABLE IF NOT EXISTS plays (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  song_id INTEGER REFERENCES songs(id) ON DELETE CASCADE,
+  seconds INTEGER NOT NULL DEFAULT 0,   -- how long they actually listened
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS plays_song ON plays(song_id);
+CREATE INDEX IF NOT EXISTS plays_user ON plays(user_id);
+-- Things going wrong for people: failed sign-ins, songs that won't play, stalls, failed uploads, JS crashes.
+CREATE TABLE IF NOT EXISTS problems (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  username TEXT,                         -- kept for failed sign-ins, where there may be no user
+  kind TEXT NOT NULL,
+  song_id INTEGER REFERENCES songs(id) ON DELETE SET NULL,
+  detail TEXT,
+  device TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS problems_created ON problems(created_at);
 `);
+
+// Existing databases predate these columns.
+const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+if (!userCols.includes('last_seen')) db.exec('ALTER TABLE users ADD COLUMN last_seen TEXT');
+if (!userCols.includes('last_login')) db.exec('ALTER TABLE users ADD COLUMN last_login TEXT');
 
 export default db;

@@ -16,6 +16,8 @@ Personal music streaming app. It's a PWA, so it installs on Android ("Install ap
   and each gets a one-time password that they must change on first sign-in. A **Send on WhatsApp**
   button (plus **Copy message**) prepares the full invite: link, username, password and install steps.
 
+- **Usage dashboard** (admin only, `/admin.html` or Upload tab): who is active, most-played songs, user uploads, and a trouble log (failed sign-ins, songs that won't play, long buffering, failed uploads). Collected silently by the app; no user-facing changes.
+
 Stack: Node 22.13+ (24 on the server) + Express + SQLite (Node's built-in `node:sqlite`, so no
 native modules to compile), plain HTML/CSS/JS front end.
 

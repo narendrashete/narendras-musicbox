@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Musicbox Dashboard</title>
+<meta name="theme-color" content="#14111f">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body class="adm">
+<header class="adm-top">
+  <a class="back" href="./" aria-label="Back to the app">&larr; Musicbox</a>
+  <h1>Usage dashboard</h1>
+  <div class="range" id="range" role="group" aria-label="Time range">
+    <button data-days="7">7 days</button><button data-days="30" class="on">30 days</button><button data-days="90">90 days</button><button data-days="365">1 year</button>
+  </div>
+</header>
+
+<main id="main" class="adm-main"><p class="muted">Loading…</p></main>
+
+<div class="footer-credit">
+  <span class="credit-label">Developed by</span>
+  <a class="credit" href="https://www.primecomputers.co.in" target="_blank" rel="noopener noreferrer"><img class="credit-logo" src="prime-logo.png" alt="Prime Computers"></a>
+</div>
+<script src="admin.js"></script>
+</body>
+</html>

@@ -17,13 +17,23 @@ app.set('trust proxy', 1);
 app.use(express.json());
 app.use(cookieParser());
 
+const logProblem = ({ userId = null, username = null, kind, songId = null, detail = null, req }) => {
+  const device = String(req.get('user-agent') || '').slice(0, 200);
+  db.prepare('INSERT INTO problems (user_id, username, kind, song_id, detail, device) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(userId, username, kind, songId, detail && String(detail).slice(0, 300), device);
+};
+
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 // ---------- auth ----------
 app.post('/api/login', (req, res) => {
   const { username = '', password = '' } = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim());
-  if (!user || !checkPassword(password, user.password_hash)) return res.status(401).json({ error: 'Wrong username or password' });
+  if (!user || !checkPassword(password, user.password_hash)) {
+    logProblem({ userId: user?.id, username: username.trim().slice(0, 40), kind: user ? 'login_wrong_password' : 'login_unknown_user', req });
+    return res.status(401).json({ error: 'Wrong username or password' });
+  }
+  db.prepare("UPDATE users SET last_login = datetime('now'), last_seen = datetime('now') WHERE id = ?").run(user.id);
   setSession(res, user);
   res.json(publicUser(user));
 });
@@ -72,6 +82,25 @@ app.get('/api/songs/:id/stream', (req, res) => {
     acceptRanges: true, dotfiles: 'allow',
     headers: { 'Content-Type': song.mime, 'Cache-Control': 'private, no-store' },
   }, (err) => { if (err && !res.headersSent) res.status(err.statusCode || 500).end(); });
+});
+
+// One row per song someone actually listened to (the app reports it after ~20s of playback).
+app.post('/api/plays', (req, res) => {
+  const songId = Number(req.body?.songId);
+  if (!db.prepare('SELECT 1 FROM songs WHERE id = ?').get(songId)) return res.status(404).json({ error: 'Not found' });
+  db.prepare('INSERT INTO plays (user_id, song_id, seconds) VALUES (?, ?, ?)')
+    .run(req.user.id, songId, Math.min(Math.max(Math.round(Number(req.body?.seconds) || 0), 0), 86400));
+  res.json({ ok: true });
+});
+
+// Trouble reported by the app itself (song won't play, buffering for ages, upload failed, crash).
+const PROBLEM_KINDS = new Set(['play_error', 'stall', 'upload_failed', 'js_error']);
+app.post('/api/problems', (req, res) => {
+  const { kind, songId, detail } = req.body || {};
+  if (!PROBLEM_KINDS.has(kind)) return res.status(400).json({ error: 'Unknown kind' });
+  const sid = db.prepare('SELECT id FROM songs WHERE id = ?').get(Number(songId))?.id ?? null;
+  logProblem({ userId: req.user.id, kind, songId: sid, detail, req });
+  res.json({ ok: true });
 });
 
 app.put('/api/songs/:id/favorite', (req, res) => {
@@ -158,6 +187,63 @@ app.delete('/api/users/:id', requireAdmin, (req, res) => {
   if (Number(req.params.id) === req.user.id) return res.status(400).json({ error: "You can't remove yourself" });
   db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
+});
+
+// ---------- admin: usage dashboard ----------
+app.get('/api/admin/stats', requireAdmin, (req, res) => {
+  const days = [7, 30, 90, 365].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
+  const since = `-${days} days`;
+  const all = (sql, ...p) => db.prepare(sql).all(...p);
+
+  const users = all(`
+    SELECT u.id, u.username, u.is_admin, u.must_change_password, u.created_at, u.last_login, u.last_seen,
+      (SELECT COUNT(*) FROM plays p WHERE p.user_id = u.id AND p.created_at >= datetime('now', ?)) AS plays,
+      (SELECT COALESCE(SUM(seconds), 0) FROM plays p WHERE p.user_id = u.id AND p.created_at >= datetime('now', ?)) AS seconds,
+      (SELECT COUNT(*) FROM plays p WHERE p.user_id = u.id) AS plays_ever,
+      (SELECT s.title FROM plays p JOIN songs s ON s.id = p.song_id WHERE p.user_id = u.id ORDER BY p.created_at DESC, p.id DESC LIMIT 1) AS last_song,
+      (SELECT COUNT(*) FROM songs s WHERE s.uploaded_by = u.id) AS uploads,
+      (SELECT COUNT(*) FROM favorites f WHERE f.user_id = u.id) AS favourites,
+      (SELECT COUNT(*) FROM problems x WHERE x.user_id = u.id AND x.created_at >= datetime('now', ?)) AS problems,
+      (SELECT COUNT(*) FROM problems x WHERE x.user_id = u.id AND x.kind LIKE 'login_%' AND x.created_at >= datetime('now', ?)) AS failed_logins
+    FROM users u ORDER BY u.last_seen DESC, u.username`, since, since, since, since);
+
+  const topSongs = all(`
+    SELECT s.id, s.title, s.artist, COUNT(*) AS plays, COUNT(DISTINCT p.user_id) AS listeners,
+           SUM(p.seconds) AS seconds, MAX(p.created_at) AS last_played
+    FROM plays p JOIN songs s ON s.id = p.song_id
+    WHERE p.created_at >= datetime('now', ?) GROUP BY s.id ORDER BY plays DESC, seconds DESC LIMIT 15`, since);
+
+  const topArtists = all(`
+    SELECT s.artist, COUNT(*) AS plays, COUNT(DISTINCT p.user_id) AS listeners
+    FROM plays p JOIN songs s ON s.id = p.song_id
+    WHERE p.created_at >= datetime('now', ?) GROUP BY s.artist ORDER BY plays DESC LIMIT 8`, since);
+
+  const daily = all(`
+    SELECT date(created_at) AS day, COUNT(*) AS plays, COUNT(DISTINCT user_id) AS listeners
+    FROM plays WHERE created_at >= datetime('now', ?) GROUP BY day ORDER BY day`, since);
+
+  const uploads = all(`
+    SELECT s.id, s.title, s.artist, s.created_at, u.username AS uploaded_by
+    FROM songs s LEFT JOIN users u ON u.id = s.uploaded_by
+    WHERE s.uploaded_by IS NOT NULL ORDER BY s.created_at DESC LIMIT 20`);
+
+  const problems = all(`
+    SELECT x.id, x.kind, x.detail, x.device, x.created_at, COALESCE(u.username, x.username) AS username, s.title AS song
+    FROM problems x LEFT JOIN users u ON u.id = x.user_id LEFT JOIN songs s ON s.id = x.song_id
+    WHERE x.created_at >= datetime('now', ?) ORDER BY x.created_at DESC, x.id DESC LIMIT 60`, since);
+
+  const brokenSongs = all(`
+    SELECT s.id, s.title, s.artist, COUNT(*) AS errors, COUNT(DISTINCT x.user_id) AS people
+    FROM problems x JOIN songs s ON s.id = x.song_id
+    WHERE x.kind = 'play_error' AND x.created_at >= datetime('now', ?) GROUP BY s.id ORDER BY errors DESC LIMIT 10`, since);
+
+  const totals = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM songs) AS songs, (SELECT COUNT(*) FROM users) AS users,
+           (SELECT COUNT(*) FROM plays WHERE created_at >= datetime('now', ?)) AS plays,
+           (SELECT COALESCE(SUM(seconds), 0) FROM plays WHERE created_at >= datetime('now', ?)) AS seconds,
+           (SELECT COUNT(*) FROM songs WHERE uploaded_by IS NOT NULL AND created_at >= datetime('now', ?)) AS uploads`).get(since, since, since);
+
+  res.json({ days, totals, users, topSongs, topArtists, daily, uploads, problems, brokenSongs });
 });
 
 app.post('/api/rescan', requireAdmin, wrap(async (req, res) => res.json(await scanLibrary())));

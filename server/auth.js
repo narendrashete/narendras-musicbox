@@ -35,6 +35,10 @@ export function requireUser(req, res, next) {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(uid);
     if (!user) throw new Error('gone');
     req.user = user;
+    // "Last seen" for the admin dashboard; throttled so streaming doesn't write on every request.
+    if (!user.last_seen || Date.now() - Date.parse(`${user.last_seen}Z`) > 60e3) {
+      db.prepare("UPDATE users SET last_seen = datetime('now') WHERE id = ?").run(user.id);
+    }
     next();
   } catch {
     res.status(401).json({ error: 'Please sign in' });

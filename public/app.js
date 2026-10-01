@@ -223,8 +223,32 @@ function playList(ids, index, shuffle = S.shuffle) {
   load(true);
 }
 
+// ---------- usage + trouble reporting (feeds the admin dashboard) ----------
+const report = (path, body) => fetch(`/api${path}`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), credentials: 'same-origin', keepalive: true,
+}).catch(() => {});
+const reportProblem = (kind, songId, detail) => report('/problems', { kind, songId, detail });
+
+// Counts real listening time per song (seeks and pauses don't count) and reports it once the
+// song has had 20s, so a quick skip doesn't count as a play.
+const listen = { id: null, sec: 0, last: 0 };
+function flushListen() {
+  if (listen.id && listen.sec >= 20) report('/plays', { songId: listen.id, seconds: listen.sec });
+  listen.id = null; listen.sec = 0;
+}
+function trackListen() {
+  const id = S.queue[S.qi];
+  if (listen.id !== id) { flushListen(); listen.id = id; listen.last = audio.currentTime; }
+  const dt = audio.currentTime - listen.last;
+  if (dt > 0 && dt < 2) listen.sec += dt;
+  listen.last = audio.currentTime;
+}
+addEventListener('pagehide', flushListen);
+addEventListener('error', (e) => reportProblem('js_error', null, `${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`));
+
 function load(autoplay) {
   const s = S.byId.get(S.queue[S.qi]); if (!s) return;
+  flushListen();
   audio.src = `/api/songs/${s.id}/stream`; // streamed in chunks via HTTP Range; nothing saved on the phone
   if (autoplay) audio.play().catch(() => {});
   $('#mini').hidden = false;
@@ -269,6 +293,7 @@ function syncPlayerUi() {
 
 let seeking = false;
 audio.addEventListener('timeupdate', () => {
+  trackListen();
   const d = audio.duration || S.byId.get(S.queue[S.qi])?.duration || 0;
   const pct = d ? (audio.currentTime / d) * 100 : 0;
   $('#miniBar').style.width = `${pct}%`;
@@ -283,11 +308,21 @@ audio.addEventListener('progress', () => {
   const ahead = audio.buffered.end(audio.buffered.length - 1) - audio.currentTime;
   $('#pBuffer').textContent = `Streaming · ${Math.max(0, Math.round(ahead))}s buffered ahead`;
 });
-audio.addEventListener('waiting', () => ($('#pBuffer').textContent = 'Buffering…'));
+let stallTimer;
+audio.addEventListener('waiting', () => {
+  $('#pBuffer').textContent = 'Buffering…';
+  clearTimeout(stallTimer);
+  const id = S.queue[S.qi];
+  stallTimer = setTimeout(() => { if (audio.readyState < 3 && !audio.paused) reportProblem('stall', id, 'Buffering for over 10 seconds'); }, 10000);
+});
+audio.addEventListener('playing', () => clearTimeout(stallTimer));
 audio.addEventListener('play', syncPlayerUi);
 audio.addEventListener('pause', syncPlayerUi);
-audio.addEventListener('ended', () => next(true));
-audio.addEventListener('error', () => { if (audio.src) toast("Couldn't play this song - skipping"); setTimeout(() => next(true), 800); });
+audio.addEventListener('ended', () => { flushListen(); next(true); });
+audio.addEventListener('error', () => {
+  if (audio.src) { toast("Couldn't play this song - skipping"); reportProblem('play_error', S.queue[S.qi], audio.error?.message || `media error ${audio.error?.code}`); }
+  setTimeout(() => next(true), 800);
+});
 
 $('#seek').addEventListener('input', () => { seeking = true; const d = audio.duration || 0; $('#tCur').textContent = fmt((d * $('#seek').value) / 100); });
 $('#seek').addEventListener('change', () => { if (audio.duration) audio.currentTime = (audio.duration * $('#seek').value) / 100; seeking = false; });
@@ -388,6 +423,8 @@ function moreView() {
   <div class="panel"><h3>People who can use the app</h3><div id="userList" class="muted">Loading…</div>
     <div class="inline"><input class="field" id="newUser" placeholder="New username" autocapitalize="none"><button class="btn small primary" id="addUser">Add</button></div>
     <div id="newPwd"></div></div>
+  <div class="panel"><h3>Usage dashboard</h3><p class="muted" style="margin:0">Who is active, what's being played, uploads and trouble.</p>
+    <a class="btn small primary" href="admin.html" style="align-self:flex-start;text-decoration:none">Open dashboard</a></div>
   <div class="panel"><h3>Library</h3><p class="muted" style="margin:0">Songs: ${S.songs.length}. If you copied MP3s straight into the OneDrive folder, rescan to pick them up.</p>
     <button class="btn small ghost" id="rescan" style="align-self:flex-start">Rescan OneDrive folder</button></div>` : ''}
   <div class="panel"><h3>Account</h3><p class="muted" style="margin:0">Signed in as <b>${esc(S.me.username)}</b>${S.me.isAdmin ? ' (admin)' : ''}</p>
@@ -507,7 +544,7 @@ async function uploadFiles(files) {
       bar.style.width = '100%';
       if (r.duplicate) { st.textContent = `Already in the library as "${r.song.title}"`; st.className = 'st'; }
       else { st.textContent = `Added: ${r.song.title} - ${r.song.artist}`; st.className = 'st ok'; S.songs.push(r.song); S.byId.set(r.song.id, r.song); }
-    } catch (err) { st.textContent = err.message; st.className = 'st bad'; }
+    } catch (err) { st.textContent = err.message; st.className = 'st bad'; reportProblem('upload_failed', null, `${file.name}: ${err.message}`); }
   }
   S.songs.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
 }
