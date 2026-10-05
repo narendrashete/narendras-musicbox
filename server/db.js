@@ -81,6 +81,11 @@ if (!userCols.includes('last_login')) db.exec('ALTER TABLE users ADD COLUMN last
 // Buddies: one row per phone that came in through the invite link, no password of their own.
 if (!userCols.includes('is_guest')) db.exec('ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0');
 if (!userCols.includes('name')) db.exec('ALTER TABLE users ADD COLUMN name TEXT');
+// Community mentors approve or delete uploads; the admin is always one too.
+if (!userCols.includes('is_mentor')) db.exec('ALTER TABLE users ADD COLUMN is_mentor INTEGER NOT NULL DEFAULT 0');
+// Uploads from non-mentors wait here (approved = 0) and stay hidden until a mentor approves them.
+const songCols = db.prepare('PRAGMA table_info(songs)').all().map((c) => c.name);
+if (!songCols.includes('approved')) db.exec('ALTER TABLE songs ADD COLUMN approved INTEGER NOT NULL DEFAULT 1');
 
 export const getSetting = (key) => db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? null;
 export const setSetting = (key, value) => db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);

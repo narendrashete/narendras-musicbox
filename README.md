@@ -12,6 +12,9 @@ Personal music streaming app. It's a PWA, so it installs on Android ("Install ap
 - **Upload**: any signed-in user can upload MP3s (the real file type is checked, not just the
   extension). Title/artist come from the ID3 tags and exact duplicates are detected. To allow
   more formats later, add them to `ALLOWED_TYPES` in `server/config.js`.
+- **Community mentors**: uploads stay hidden from everyone until a mentor approves them (Upload →
+  *Waiting for approval*). The admin is always a mentor and can make others mentors with *Make mentor*
+  under *People who can use the app*. Mentors can also delete any song (🗑 on the song; the admin uses ✎ → Delete).
 - **Users**: no self sign-up. The admin adds people under Upload → *People who can use the app*
   and each gets a one-time password that they must change on first sign-in. A **Send on WhatsApp**
   button (plus **Copy message**) prepares the full invite: link, username, password and install steps.

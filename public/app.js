@@ -18,11 +18,12 @@ const ICON = {
   edit: '<svg viewBox="0 0 24 24"><path d="M4 17.2V20h2.8l8.3-8.3-2.8-2.8L4 17.2ZM17.7 9.1a1 1 0 0 0 0-1.4l-1.4-1.4a1 1 0 0 0-1.4 0l-1.2 1.2 2.8 2.8 1.2-1.2Z"/></svg>',
   back: '<svg viewBox="0 0 24 24"><path d="m14 18-6-6 6-6 1.4 1.4-4.6 4.6 4.6 4.6L14 18Z"/></svg>',
   whatsapp: '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.2-.2-.4-.3Z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2ZM6 9h12l-1 12H7L6 9Zm4 2v8h1.5v-8H10Zm2.5 0v8H14v-8h-1.5Z"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24"><path d="M14 4h6v6l-2.3-2.3-3.3 3.3-1.4-1.4 3.3-3.3L14 4ZM4 18.6 16.3 6.3l1.4 1.4L5.4 20 4 18.6ZM14.6 13.2l1.4-1.4 1.7 1.7L20 11.2V17h-6l2.3-2.3-1.7-1.5ZM4 5.4 5.4 4l5.2 5.2-1.4 1.4L4 5.4Z"/></svg>',
 };
 
 const S = {
-  me: null, songs: [], cats: [], byId: new Map(),
+  me: null, songs: [], pending: [], cats: [], byId: new Map(), // pending: uploads waiting for a mentor (mentors only)
   tab: 'songs', sub: null, query: '',
   spot: null, // song id from a "new song" WhatsApp link (/?song=<id>), shown on top of All songs
   queue: [], qi: -1,
@@ -123,7 +124,8 @@ function installBanner() {
 
 async function loadLibrary() {
   const { songs, categories } = await api('/library');
-  S.songs = songs; S.cats = categories; S.byId = new Map(songs.map((s) => [s.id, s]));
+  S.songs = songs.filter((s) => !s.pending); S.pending = songs.filter((s) => s.pending);
+  S.cats = categories; S.byId = new Map(songs.map((s) => [s.id, s]));
 }
 
 // ---------- rendering ----------
@@ -147,7 +149,8 @@ function songRows(list) {
         <span class="r-sub">${esc(s.credits || s.artist)}${s.album ? ` · ${esc(s.album)}` : ''}</span></button>
       <span class="dur">${s.duration ? fmt(s.duration) : ''}</span>
       <button class="icon-btn fav${s.fav ? ' on' : ''}" data-act="fav" aria-label="Favourite">${s.fav ? ICON.heart : ICON.heartO}</button>
-      ${S.me.isAdmin ? `<button class="icon-btn" data-act="edit" aria-label="Edit">${ICON.edit}</button>` : ''}
+      ${S.me.isAdmin ? `<button class="icon-btn" data-act="edit" aria-label="Edit">${ICON.edit}</button>`
+        : S.me.isMentor ? `<button class="icon-btn" data-act="del" aria-label="Delete">${ICON.trash}</button>` : ''}
     </li>`).join('')}</ul>`;
 }
 
@@ -167,7 +170,9 @@ function render() {
   if (S.tab === 'songs') {
     currentList = S.songs.filter(matches);
     const spot = !q && S.byId.get(S.spot);
-    html = installBanner() + (spot ? `<div class="panel spot"><div class="view-head"><h2>🎵 New song</h2>
+    const waiting = S.pending.length && !q ? `<div class="install"><span>⏳ ${S.pending.length} uploaded song${S.pending.length === 1 ? ' is' : 's are'} waiting for approval</span>
+      <button class="btn small primary" data-act="review">Review</button></div>` : '';
+    html = installBanner() + waiting + (spot ? `<div class="panel spot"><div class="view-head"><h2>🎵 New song</h2>
       <button class="icon-btn" data-act="nospot" aria-label="Hide">✕</button></div>${songRows([spot])}</div>` : '')
       + songsHead(q ? 'Search results' : 'All songs', currentList) + songRows(currentList);
   } else if (S.tab === 'favourites') {
@@ -222,6 +227,8 @@ view.addEventListener('click', async (e) => {
   else if (act === 'install') { installPrompt?.prompt(); installPrompt = null; render(); }
   else if (act === 'noinstall') { store.set('mb.installHidden', true); render(); }
   else if (act === 'nospot') { S.spot = null; render(); }
+  else if (act === 'del') deleteSong(id);
+  else if (act === 'review') { S.tab = 'more'; S.sub = null; render(); $('#pendingPanel')?.scrollIntoView(); }
 });
 
 $('#tabs').addEventListener('click', (e) => {
@@ -282,10 +289,41 @@ function trackListen() {
 addEventListener('pagehide', flushListen);
 addEventListener('error', (e) => reportProblem('js_error', null, `${e.message} (${(e.filename || '').split('/').pop()}:${e.lineno})`));
 
+// Phones cut a locked page's network while it's between songs, so the next song can't start
+// streaming until the screen is unlocked. Fetch the next song into memory while the current one
+// is still playing, and switch to that copy when it ends.
+const pre = { id: null, url: null, ctrl: null };
+let playingUrl = null; // in-memory copy currently in the player, freed when we move on
+function upcoming() {
+  if (S.repeat === 'one') return null;
+  if (S.qi < S.queue.length - 1) return S.queue[S.qi + 1];
+  return S.repeat === 'all' ? S.queue[0] : null;
+}
+function dropPrefetch() {
+  pre.ctrl?.abort();
+  if (pre.url) URL.revokeObjectURL(pre.url);
+  pre.id = pre.url = pre.ctrl = null;
+}
+function prefetchNext() {
+  const id = upcoming();
+  if (!id || pre.id === id) return;
+  dropPrefetch(); pre.id = id;
+  if ((S.byId.get(id)?.duration || 0) > 1200) return; // long mixes: too big to hold in memory, just stream
+  const ctrl = (pre.ctrl = new AbortController());
+  fetch(`/api/songs/${id}/stream`, { credentials: 'same-origin', signal: ctrl.signal })
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((b) => { if (b && pre.ctrl === ctrl) pre.url = URL.createObjectURL(b); })
+    .catch(() => {});
+}
+
 function load(autoplay) {
   const s = S.byId.get(S.queue[S.qi]); if (!s) return;
   flushListen();
-  audio.src = `/api/songs/${s.id}/stream`; // streamed in chunks via HTTP Range; nothing saved on the phone
+  const old = playingUrl;
+  playingUrl = pre.id === s.id ? pre.url : null;
+  if (playingUrl) pre.id = pre.url = pre.ctrl = null; else dropPrefetch();
+  audio.src = playingUrl || `/api/songs/${s.id}/stream`; // streamed in chunks via HTTP Range; nothing saved on the phone
+  if (old) URL.revokeObjectURL(old);
   if (autoplay) audio.play().catch(() => {});
   $('#mini').hidden = false;
   syncPlayerUi();
@@ -330,6 +368,7 @@ function syncPlayerUi() {
 let seeking = false;
 audio.addEventListener('timeupdate', () => {
   trackListen();
+  if (audio.duration - audio.currentTime < 90) prefetchNext();
   const d = audio.duration || S.byId.get(S.queue[S.qi])?.duration || 0;
   const pct = d ? (audio.currentTime / d) * 100 : 0;
   $('#miniBar').style.width = `${pct}%`;
@@ -414,7 +453,8 @@ function editSong(id) {
     <div class="inline"><input class="field" name="newcat" placeholder="New category, e.g. Spiritual"><button class="btn small ghost" data-add>Add</button></div>
     <p class="muted" style="font-size:12px;margin:0">${s.uploaded_by ? `Uploaded by ${esc(s.uploaded_by)}` : 'Imported from the original collection'}</p>
     <p class="error"></p>
-    <div class="actions"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-save>Save</button></div>`);
+    <div class="actions"><button class="btn danger" data-del style="margin-right:auto">Delete</button><button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-save>Save</button></div>`);
+  $('[data-del]', el).onclick = () => deleteSong(id);
   $('[data-add]', el).onclick = async () => {
     const name = $('[name=newcat]', el).value.trim(); if (!name) return;
     const cat = await api('/categories', { method: 'POST', body: { name } });
@@ -436,6 +476,19 @@ function editSong(id) {
   };
 }
 
+// Mentors (and the admin) can take a song out of the library for good.
+async function deleteSong(id) {
+  const s = S.byId.get(id); if (!s) return;
+  if (!confirm(`Delete "${s.title}" from the Musicbox? Nobody will be able to play it any more.`)) return;
+  try { await api(`/songs/${id}`, { method: 'DELETE' }); } catch (err) { return toast(err.message); }
+  dropSong(id); closeSheet(); render(); toast('Song deleted');
+}
+function dropSong(id) {
+  S.songs = S.songs.filter((s) => s.id !== id); S.pending = S.pending.filter((s) => s.id !== id); S.byId.delete(id);
+  const qi = S.queue.indexOf(id);
+  if (qi >= 0) { S.queue.splice(qi, 1); if (qi < S.qi) S.qi--; }
+}
+
 function newCategory() {
   const el = openSheet(`<h3>New category</h3><input class="field" name="n" placeholder="e.g. Comedy, Dance, Spiritual">
     <p class="error"></p><div class="actions"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-ok>Create</button></div>`);
@@ -451,6 +504,7 @@ function newCategory() {
 
 // ---------- upload / account / admin ----------
 const uploadPanel = () => `<div class="view-head"><h2>Upload songs</h2></div>
+  ${S.me.isMentor ? '' : '<p class="muted" style="margin:0">A community mentor checks each song before it shows up for everyone.</p>'}
   <div class="panel">
     <label class="drop" id="drop"><input type="file" id="files" accept=".mp3,.m4a,audio/mpeg,audio/mp4" multiple>
       <b>Tap to choose MP3 or M4A files</b><br><small>or drag them here · title &amp; artist are read from the file</small></label>
@@ -468,6 +522,14 @@ function moreView() {
       <button class="btn small danger" id="logout" style="align-self:flex-start">Sign out</button></div>`;
   }
   return `${uploadPanel()}
+  ${S.me.isMentor ? `<div class="panel" id="pendingPanel"><h3>Waiting for approval</h3>
+    <p class="muted" style="margin:0">Songs uploaded by others stay hidden from everyone until a mentor approves them. Play one to check it first.</p>
+    ${S.pending.length ? `<ul class="list">${S.pending.map((s) => `<li class="row" data-pid="${s.id}">
+      <span class="art" style="${artStyle(s.artist)}">${esc(initial(s.artist))}</span>
+      <button class="r-main" data-p="play"><span class="r-title">${esc(s.title)}</span>
+        <span class="r-sub">${esc(s.credits || s.artist)}${s.uploaded_by ? ` · from ${esc(s.uploaded_by)}` : ''}</span></button>
+      <button class="btn small primary" data-p="ok">Approve</button><button class="icon-btn" data-p="del" aria-label="Delete">${ICON.trash}</button>
+    </li>`).join('')}</ul>` : '<p class="muted" style="margin:0">Nothing waiting.</p>'}</div>` : ''}
   ${S.me.isAdmin ? `
   <div class="panel"><h3>Categories</h3><div id="catAdmin"></div>
     <div class="inline"><input class="field" id="catName" placeholder="New category"><button class="btn small primary" id="catAdd">Add</button></div></div>
@@ -531,6 +593,22 @@ function wireMore() {
     return;
   }
   $('#chPwd').onclick = () => showPwd(false);
+  if (S.me.isMentor) {
+    $('#pendingPanel').onclick = async (e) => {
+      const b = e.target.closest('[data-p]'); if (!b) return;
+      const id = Number(b.closest('[data-pid]').dataset.pid);
+      if (b.dataset.p === 'play') playList([id], 0, false);
+      else if (b.dataset.p === 'del') deleteSong(id);
+      else if (b.dataset.p === 'ok') {
+        try {
+          const song = await api(`/songs/${id}/approve`, { method: 'POST' });
+          S.pending = S.pending.filter((s) => s.id !== id); S.songs.push(song); S.byId.set(id, song);
+          S.songs.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
+          render(); toast(`Approved: ${song.title}`);
+        } catch (err) { toast(err.message); }
+      }
+    };
+  }
   if (!S.me.isAdmin) return;
 
   const drawJoin = (code) => {
@@ -585,7 +663,8 @@ function wireMore() {
 
   const drawUsers = async () => {
     const users = await api('/users');
-    $('#userList').innerHTML = users.map((u) => `<div class="urow" data-uid="${u.id}"><span>${esc(u.username)}${u.is_admin ? ' <small class="muted">admin</small>' : ''}</span>
+    $('#userList').innerHTML = users.map((u) => `<div class="urow" data-uid="${u.id}"><span>${esc(u.username)}${u.is_admin ? ' <small class="muted">admin</small>' : u.is_mentor ? ' <small class="muted">mentor</small>' : ''}</span>
+      ${u.is_admin ? '' : `<button class="btn small ${u.is_mentor ? 'primary' : 'ghost'}" data-mentor="${u.is_mentor ? 0 : 1}">${u.is_mentor ? 'Mentor ✓' : 'Make mentor'}</button>`}
       <button class="btn small ghost" data-reset>Reset password</button>${u.id === S.me.id ? '' : '<button class="btn small danger" data-rm>Remove</button>'}</div>`).join('');
   };
   drawUsers();
@@ -602,7 +681,10 @@ function wireMore() {
   $('#userList').onclick = async (e) => {
     const row = e.target.closest('[data-uid]'); if (!row) return;
     const id = row.dataset.uid, name = row.querySelector('span').firstChild.textContent;
-    if (e.target.matches('[data-reset]')) { const r = await api(`/users/${id}/reset`, { method: 'POST' }); showPwdOnce(name, r.password); }
+    if (e.target.matches('[data-mentor]')) {
+      await api(`/users/${id}/mentor`, { method: 'PUT', body: { mentor: e.target.dataset.mentor === '1' } }); drawUsers();
+      toast(e.target.dataset.mentor === '1' ? `${name} is now a community mentor` : `${name} is no longer a mentor`);
+    } else if (e.target.matches('[data-reset]')) { const r = await api(`/users/${id}/reset`, { method: 'POST' }); showPwdOnce(name, r.password); }
     else if (e.target.matches('[data-rm]') && confirm(`Remove ${name}? Their favourites are removed too; songs they uploaded stay.`)) { await api(`/users/${id}`, { method: 'DELETE' }); drawUsers(); }
   };
   $('#rescan').onclick = async (e) => {
@@ -683,6 +765,7 @@ async function uploadFiles(files) {
       });
       bar.style.width = '100%';
       if (r.duplicate) { st.textContent = `Already in the library as "${r.song.title}"`; st.className = 'st'; }
+      else if (r.song.pending) { st.textContent = `Sent for approval: ${r.song.title} - ${r.song.artist}. Everyone sees it once a mentor approves it.`; st.className = 'st ok'; }
       else { st.textContent = `Added: ${r.song.title} - ${r.song.artist}`; st.className = 'st ok'; S.songs.push(r.song); S.byId.set(r.song.id, r.song); }
     } catch (err) { st.textContent = err.message; st.className = 'st bad'; reportProblem('upload_failed', null, `${file.name}: ${err.message}`); }
   }

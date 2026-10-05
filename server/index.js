@@ -8,7 +8,7 @@ import db, { getSetting, setSetting } from './db.js';
 import { PORT, HOST, APP_DIR, ALLOWED_TYPES, MAX_UPLOAD_MB, LIBRARY_DIR, DB_PATH } from './config.js';
 import { addFile, absPath, renameSong, scanLibrary, sniffType } from './library.js';
 import {
-  requireUser, requireAdmin, setSession, clearSession, publicUser, sessionUser,
+  requireUser, requireAdmin, requireMentor, isMentor, setSession, clearSession, publicUser, sessionUser,
   hashPassword, checkPassword, randomPassword,
 } from './auth.js';
 
@@ -97,21 +97,22 @@ app.post('/api/me/password', (req, res) => {
 
 // ---------- library ----------
 const songSelect = `
-  SELECT s.id, s.title, s.artist, s.credits, s.album, s.duration, s.created_at,
+  SELECT s.id, s.title, s.artist, s.credits, s.album, s.duration, s.created_at, s.approved = 0 AS pending,
          u.username AS uploaded_by,
          EXISTS (SELECT 1 FROM favorites f WHERE f.song_id = s.id AND f.user_id = @uid) AS fav,
          (SELECT group_concat(sc.category_id) FROM song_categories sc WHERE sc.song_id = s.id) AS cats
   FROM songs s LEFT JOIN users u ON u.id = s.uploaded_by`;
-const shapeSong = (r) => ({ ...r, fav: !!r.fav, cats: r.cats ? r.cats.split(',').map(Number) : [] });
+const shapeSong = (r) => ({ ...r, fav: !!r.fav, pending: !!r.pending, cats: r.cats ? r.cats.split(',').map(Number) : [] });
 const getSong = (id, uid) => {
   const r = db.prepare(`${songSelect} WHERE s.id = @id`).get({ id, uid });
   return r && shapeSong(r);
 };
 
 // The whole library in one go - a few thousand rows is still small, and it lets the phone
-// search/filter instantly without round trips.
+// search/filter instantly without round trips. Songs waiting for approval go to mentors only.
 app.get('/api/library', (req, res) => {
-  const songs = db.prepare(`${songSelect} ORDER BY s.title COLLATE NOCASE`).all({ uid: req.user.id }).map(shapeSong);
+  const songs = db.prepare(`${songSelect} ${isMentor(req.user) ? '' : 'WHERE s.approved = 1'} ORDER BY s.title COLLATE NOCASE`)
+    .all({ uid: req.user.id }).map(shapeSong);
   const categories = db.prepare('SELECT id, name FROM categories ORDER BY name COLLATE NOCASE').all();
   res.json({ songs, categories });
 });
@@ -119,8 +120,8 @@ app.get('/api/library', (req, res) => {
 // Streams with HTTP Range support: the player fetches only the bytes it's about to play,
 // and nothing is stored on the phone beyond the browser's normal playback buffer.
 app.get('/api/songs/:id/stream', (req, res) => {
-  const song = db.prepare('SELECT rel_path, mime FROM songs WHERE id = ?').get(req.params.id);
-  if (!song) return res.status(404).end();
+  const song = db.prepare('SELECT rel_path, mime, approved FROM songs WHERE id = ?').get(req.params.id);
+  if (!song || (!song.approved && !isMentor(req.user))) return res.status(404).end();
   const file = absPath(song.rel_path);
   // Trust the file's bytes over its name: an AAC/M4A file named .mp3 served as audio/mpeg won't play on iPhone/Safari.
   let mime = song.mime;
@@ -172,11 +173,26 @@ app.post('/api/songs', upload.single('file'), wrap(async (req, res) => {
     const { song, duplicate } = await addFile(req.file.path, {
       mode: 'move', uploadedBy: req.user.id, originalName: Buffer.from(req.file.originalname, 'latin1').toString('utf8'), overrides: { title: req.body.title, artist: req.body.artist },
     });
+    if (!duplicate && !isMentor(req.user)) db.prepare('UPDATE songs SET approved = 0 WHERE id = ?').run(song.id);
     res.status(duplicate ? 200 : 201).json({ song: getSong(song.id, req.user.id), duplicate });
   } finally {
     fs.rmSync(req.file.path, { force: true });
   }
 }));
+
+// ---------- community mentors: approve or delete songs ----------
+app.post('/api/songs/:id/approve', requireMentor, (req, res) => {
+  db.prepare('UPDATE songs SET approved = 1 WHERE id = ?').run(req.params.id);
+  res.json(getSong(req.params.id, req.user.id));
+});
+// Removes the file from the library folder too. The OneDrive backup is copy-only, so it keeps a copy.
+app.delete('/api/songs/:id', requireMentor, (req, res) => {
+  const song = db.prepare('SELECT rel_path FROM songs WHERE id = ?').get(req.params.id);
+  if (!song) return res.status(404).json({ error: 'Not found' });
+  fs.rmSync(absPath(song.rel_path), { force: true });
+  db.prepare('DELETE FROM songs WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
 
 // ---------- admin: song details + categories ----------
 app.patch('/api/songs/:id', requireAdmin, (req, res) => {
@@ -215,7 +231,7 @@ app.delete('/api/categories/:id', requireAdmin, (req, res) => {
 
 // ---------- admin: users ----------
 app.get('/api/users', requireAdmin, (req, res) => {
-  res.json(db.prepare('SELECT id, username, is_admin, created_at FROM users WHERE is_guest = 0 ORDER BY username').all());
+  res.json(db.prepare('SELECT id, username, is_admin, is_mentor, created_at FROM users WHERE is_guest = 0 ORDER BY username').all());
 });
 app.post('/api/users', requireAdmin, (req, res) => {
   const username = String(req.body?.username || '').trim();
@@ -224,6 +240,10 @@ app.post('/api/users', requireAdmin, (req, res) => {
   const password = randomPassword();
   db.prepare('INSERT INTO users (username, password_hash, is_admin) VALUES (?, ?, ?)').run(username, hashPassword(password), req.body.isAdmin ? 1 : 0);
   res.json({ username, password }); // shown once to the admin to pass on
+});
+app.put('/api/users/:id/mentor', requireAdmin, (req, res) => {
+  db.prepare('UPDATE users SET is_mentor = ? WHERE id = ?').run(req.body?.mentor ? 1 : 0, req.params.id);
+  res.json({ ok: true });
 });
 app.post('/api/users/:id/reset', requireAdmin, (req, res) => {
   const password = randomPassword();

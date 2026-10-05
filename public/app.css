@@ -184,3 +184,4 @@ main { padding: 8px 16px calc(var(--tabs-h) + var(--mini-h) + var(--safe-b) + 24
 .spot { gap: 4px; }
 .spot .view-head { margin: 0; }
 .spot .list { margin: 0; }
+#pendingPanel { scroll-margin-top: 80px; }

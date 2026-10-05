@@ -29,7 +29,7 @@ export const clearSession = (res) => res.clearCookie(COOKIE);
 
 export function publicUser(u) {
   return {
-    id: u.id, username: u.username, name: u.name || null, isAdmin: !!u.is_admin,
+    id: u.id, username: u.username, name: u.name || null, isAdmin: !!u.is_admin, isMentor: isMentor(u),
     isGuest: !!u.is_guest, mustChangePassword: !!u.must_change_password,
   };
 }
@@ -58,6 +58,12 @@ export function requireUser(req, res, next) {
   } catch {
     res.status(401).json({ error: 'Please sign in' });
   }
+}
+
+export const isMentor = (u) => !!(u.is_admin || u.is_mentor);
+export function requireMentor(req, res, next) {
+  if (!isMentor(req.user || {})) return res.status(403).json({ error: 'Community mentors only' });
+  next();
 }
 
 export function requireAdmin(req, res, next) {
