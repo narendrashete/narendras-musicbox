@@ -615,7 +615,7 @@ function buddiesMessage(code) {
 }
 function inviteScript(howToOpen) {
   return [
-    "🎵 *Narendra's Musicbox*, our family music collection",
+    "🎵 *Narendra's Musicbox*, your music collection",
     '',
     ...howToOpen,
     '',
