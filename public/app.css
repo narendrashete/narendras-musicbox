@@ -166,6 +166,9 @@ main { padding: 8px 16px calc(var(--tabs-h) + var(--mini-h) + var(--safe-b) + 24
 .urow { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .urow:last-child { border-bottom: 0; }
 .urow span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.urow .btn { white-space: nowrap; }
+/* Phones: name on its own line, buttons underneath */
+@media (max-width: 600px) { .urow { flex-wrap: wrap; } .urow span { flex-basis: 100%; } }
 .inline { display: flex; gap: 8px; }
 .inline .field { flex: 1; min-width: 0; }
 .secret { font-family: ui-monospace, Consolas, monospace; background: var(--bg); padding: 10px; border-radius: 10px; user-select: all; word-break: break-all; }
