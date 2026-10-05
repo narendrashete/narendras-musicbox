@@ -176,3 +176,8 @@ main { padding: 8px 16px calc(var(--tabs-h) + var(--mini-h) + var(--safe-b) + 24
 .footer-credit .credit { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); transition: transform .15s ease; }
 .footer-credit .credit:hover { transform: translateY(-1px); }
 .footer-credit .credit-logo { display: block; height: 16px; width: auto; }
+
+/* Install-to-home-screen nudge and invite-code hint */
+.install { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 12px 0 4px; font-size: 14px; }
+.install span { flex: 1; }
+.auth .hint { font-size: 12px; text-align: center; margin: 0; }

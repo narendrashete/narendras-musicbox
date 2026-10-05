@@ -87,8 +87,37 @@ $('#pwdForm').addEventListener('submit', async (e) => {
 async function afterLogin() {
   if (S.me.mustChangePassword) return showPwd(true);
   show('app');
+  $('#tabs [data-tab=more]').lastChild.textContent = S.me.isGuest ? 'Me' : 'Upload';
   await loadLibrary();
   render();
+  if (S.me.isGuest && !S.me.name && !store.get('mb.askedName', false)) askName();
+}
+
+// Optional and skippable: just so the dashboard shows "Ramesh" instead of "Buddy-x7Kq2".
+function askName() {
+  store.set('mb.askedName', true);
+  const el = openSheet(`<h3>Welcome to the Musicbox 🎵</h3>
+    <p class="muted" style="margin:0">What should we call you? (optional)</p>
+    <input class="field" name="n" placeholder="Your name" autocomplete="name" maxlength="40">
+    <div class="actions"><button class="btn ghost" data-close>Skip</button><button class="btn primary" data-ok>Start listening</button></div>`);
+  $('[data-ok]', el).onclick = async () => { await saveName($('[name=n]', el).value); closeSheet(); };
+}
+async function saveName(name) {
+  if (!name.trim()) return;
+  try { S.me.name = (await api('/me/name', { method: 'PUT', body: { name } })).name; toast(`Hi ${S.me.name}!`); } catch (err) { toast(err.message); }
+}
+
+// "Install app" in one tap where the browser allows it (Android/desktop Chrome); iPhone needs Safari's Share menu.
+let installPrompt = null;
+addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; if (S.me && S.tab === 'songs') render(); });
+addEventListener('appinstalled', () => { installPrompt = null; store.set('mb.installHidden', true); if (S.me) render(); });
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+function installBanner() {
+  if (standalone() || store.get('mb.installHidden', false) || S.tab !== 'songs' || S.query) return '';
+  if (installPrompt) return `<div class="install"><span>📲 Add Musicbox to your home screen</span><button class="btn small primary" data-act="install">Install</button><button class="icon-btn" data-act="noinstall" aria-label="Hide">✕</button></div>`;
+  if (isIos()) return `<div class="install"><span>📲 To add Musicbox to your home screen: tap Share ⎙ in Safari → <b>Add to Home Screen</b></span><button class="icon-btn" data-act="noinstall" aria-label="Hide">✕</button></div>`;
+  return '';
 }
 
 async function loadLibrary() {
@@ -136,7 +165,7 @@ function render() {
   const q = S.query;
   if (S.tab === 'songs') {
     currentList = S.songs.filter(matches);
-    html = songsHead(q ? 'Search results' : 'All songs', currentList) + songRows(currentList);
+    html = installBanner() + songsHead(q ? 'Search results' : 'All songs', currentList) + songRows(currentList);
   } else if (S.tab === 'favourites') {
     currentList = S.songs.filter((s) => s.fav && matches(s));
     html = songsHead('Favourites', currentList) + (currentList.length || q ? songRows(currentList)
@@ -186,6 +215,8 @@ view.addEventListener('click', async (e) => {
   else if (act === 'open') { S.sub = S.tab === 'categories' ? Number(btn.dataset.key) : btn.dataset.key; render(); scrollTo(0, 0); }
   else if (act === 'back') { S.sub = null; render(); }
   else if (act === 'newcat') newCategory();
+  else if (act === 'install') { installPrompt?.prompt(); installPrompt = null; render(); }
+  else if (act === 'noinstall') { store.set('mb.installHidden', true); render(); }
 });
 
 $('#tabs').addEventListener('click', (e) => {
@@ -257,7 +288,7 @@ function load(autoplay) {
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: s.title, artist: s.credits || s.artist, album: s.album || "Narendra's Musicbox",
-      artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
+      artwork: [{ src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
     });
   }
 }
@@ -415,6 +446,14 @@ function newCategory() {
 
 // ---------- upload / account / admin ----------
 function moreView() {
+  if (S.me.isGuest) {
+    return `<div class="view-head"><h2>Me</h2></div>
+    <div class="panel"><h3>Your name</h3><p class="muted" style="margin:0">So Narendra knows who's listening. Optional.</p>
+      <div class="inline"><input class="field" id="myName" placeholder="Your name" maxlength="40" value="${esc(S.me.name || '')}"><button class="btn small primary" id="saveName">Save</button></div></div>
+    ${sharePanel()}
+    <div class="panel"><h3>Sign out</h3><p class="muted" style="margin:0">You'll need the invite link again to come back.</p>
+      <button class="btn small danger" id="logout" style="align-self:flex-start">Sign out</button></div>`;
+  }
   return `<div class="view-head"><h2>Upload songs</h2></div>
   <div class="panel">
     <label class="drop" id="drop"><input type="file" id="files" accept=".mp3,.m4a,audio/mpeg,audio/mp4" multiple>
@@ -424,9 +463,13 @@ function moreView() {
   ${S.me.isAdmin ? `
   <div class="panel"><h3>Categories</h3><div id="catAdmin"></div>
     <div class="inline"><input class="field" id="catName" placeholder="New category"><button class="btn small primary" id="catAdd">Add</button></div></div>
+  <div class="panel"><h3>Invite link for buddies</h3>
+    <p class="muted" style="margin:0">One link for everyone: WhatsApp status, groups, LinkedIn. Anyone who taps it is in straight away, with no username or password to set. Each phone shows up on the dashboard as its own buddy. Change the code to stop the old link from working; buddies already in stay in. Leave it empty to switch the link off.</p>
+    <div class="inline"><input class="field" id="joinCode" placeholder="e.g. MyBuddies" autocapitalize="none"><button class="btn small primary" id="saveJoin">Save</button></div>
+    <div id="joinShare"></div></div>
   <div class="panel"><h3>People who can use the app</h3><div id="userList" class="muted">Loading…</div>
     <div class="inline"><input class="field" id="newUser" placeholder="New username" autocapitalize="none"><button class="btn small primary" id="addUser">Add</button></div>
-    <div id="newPwd"></div></div>
+    <div id="newPwd"></div></div>` : sharePanel()}${S.me.isAdmin ? `
   <div class="panel"><h3>Usage dashboard</h3><p class="muted" style="margin:0">Who is active, what's being played, uploads and trouble.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn small primary" href="admin.html" style="text-decoration:none">Open dashboard</a>
     <a class="btn small ghost" href="health.html" style="text-decoration:none">Health check</a></div></div>
@@ -436,15 +479,61 @@ function moreView() {
     <div class="inline"><button class="btn small ghost" id="chPwd">Change password</button><button class="btn small danger" id="logout">Sign out</button></div></div>`;
 }
 
+// WhatsApp + Copy buttons for a ready-made message.
+function shareButtons(msg) {
+  return `<div class="inline"><a class="btn small wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener noreferrer">${ICON.whatsapp} Send on WhatsApp</a>
+    <button class="btn small ghost" data-copy>Copy message</button></div>`;
+}
+async function copyText(msg) {
+  try { await navigator.clipboard.writeText(msg); toast('Message copied'); return; } catch { /* older phones: fall back below */ }
+  const ta = Object.assign(document.createElement('textarea'), { value: msg });
+  ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select();
+  const ok = document.execCommand('copy'); ta.remove();
+  toast(ok ? 'Message copied' : "Couldn't copy - use Send on WhatsApp instead");
+}
+
+// Everyone who's in can forward the buddies' link (filled in by wireMore when a link is set).
+const sharePanel = () => `<div class="panel" id="sharePanel" hidden><h3>Share with friends</h3>
+  <p class="muted" style="margin:0">Know someone who'd enjoy these songs? Send them the invite link. They're in with one tap.</p><div id="shareBtns"></div></div>`;
+
 function wireMore() {
+  if ($('#sharePanel')) {
+    api('/invite').then(({ code }) => {
+      if (!code || !$('#sharePanel')) return;
+      const msg = buddiesMessage(code);
+      $('#shareBtns').innerHTML = shareButtons(msg);
+      $('#shareBtns [data-copy]').onclick = () => copyText(msg);
+      $('#sharePanel').hidden = false;
+    }).catch(() => {});
+  }
+  $('#logout').onclick = async () => {
+    if (S.me.isGuest && !confirm("Sign out? You'll need the invite link again to come back.")) return;
+    await api('/logout', { method: 'POST' }).catch(() => {}); S.me = null; showLogin();
+  };
+  if (S.me.isGuest) {
+    $('#saveName').onclick = () => saveName($('#myName').value);
+    return;
+  }
   const input = $('#files'), drop = $('#drop');
   input.onchange = () => { uploadFiles([...input.files]); input.value = ''; };
   drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
   drop.ondragleave = () => drop.classList.remove('over');
   drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); uploadFiles([...e.dataTransfer.files]); };
   $('#chPwd').onclick = () => showPwd(false);
-  $('#logout').onclick = async () => { await api('/logout', { method: 'POST' }).catch(() => {}); S.me = null; showLogin(); };
   if (!S.me.isAdmin) return;
+
+  const drawJoin = (code) => {
+    $('#joinCode').value = code;
+    if (!code) { $('#joinShare').innerHTML = '<p class="muted" style="margin:0">Invite link is off.</p>'; return; }
+    const msg = buddiesMessage(code);
+    $('#joinShare').innerHTML = `<div class="secret">${esc(`${location.origin}/join/${encodeURIComponent(code)}`)}</div>${shareButtons(msg)}`;
+    $('#joinShare [data-copy]').onclick = () => copyText(msg);
+  };
+  api('/admin/join').then((r) => drawJoin(r.code)).catch(() => {});
+  $('#saveJoin').onclick = async () => {
+    try { drawJoin((await api('/admin/join', { method: 'PUT', body: { code: $('#joinCode').value } })).code); toast('Invite link saved'); }
+    catch (err) { toast(err.message); }
+  };
 
   const drawCats = () => {
     $('#catAdmin').innerHTML = S.cats.length ? S.cats.map((c) => `<div class="urow" data-cid="${c.id}"><span>${esc(c.name)}</span>
@@ -480,16 +569,8 @@ function wireMore() {
   const showPwdOnce = (who, pwd) => {
     const msg = inviteMessage(who, pwd);
     $('#newPwd').innerHTML = `<p class="muted" style="margin:0">One-time password for <b>${esc(who)}</b> - send it to them; they'll set their own on first sign-in:</p>
-      <div class="secret">${esc(pwd)}</div>
-      <div class="inline"><a class="btn small wa" href="https://wa.me/?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener noreferrer">${ICON.whatsapp} Send on WhatsApp</a>
-      <button class="btn small ghost" id="copyInvite">Copy message</button></div>`;
-    $('#copyInvite').onclick = async () => {
-      try { await navigator.clipboard.writeText(msg); toast('Message copied'); return; } catch { /* older phones: fall back below */ }
-      const ta = Object.assign(document.createElement('textarea'), { value: msg });
-      ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select();
-      const ok = document.execCommand('copy'); ta.remove();
-      toast(ok ? 'Message copied' : "Couldn't copy - use Send on WhatsApp instead");
-    };
+      <div class="secret">${esc(pwd)}</div>${shareButtons(msg)}`;
+    $('#newPwd [data-copy]').onclick = () => copyText(msg);
   };
   $('#addUser').onclick = async () => {
     try { const r = await api('/users', { method: 'POST', body: { username: $('#newUser').value } }); $('#newUser').value = ''; showPwdOnce(r.username, r.password); drawUsers(); }
@@ -508,20 +589,31 @@ function wireMore() {
   };
 }
 
-// Ready-to-send invite, in WhatsApp's formatting (*bold*).
+// Ready-to-send invites, in WhatsApp's formatting (*bold*). Both use the same script.
 function inviteMessage(username, password) {
-  return [
-    "🎵 *Narendra's Musicbox*, our family music collection",
-    '',
+  return inviteScript([
     `Open: ${location.origin}`,
     `Username: ${username}`,
     `Password: ${password} (it will ask you to set your own the first time)`,
+  ]);
+}
+function buddiesMessage(code) {
+  return inviteScript([
+    `Tap to start listening, no sign-up needed: ${location.origin}/join/${encodeURIComponent(code)}`,
+    `(If it ever asks you to sign in, type *${code}* as both username and password)`,
+  ], false);
+}
+function inviteScript(howToOpen, canUpload = true) {
+  return [
+    "🎵 *Narendra's Musicbox*, our family music collection",
+    '',
+    ...howToOpen,
     '',
     '*Add it to your phone like an app:*',
     '• *Android (Chrome):* tap ⋮ (top right) → Install app / Add to Home screen',
     '• *iPhone:* open the link in Safari → tap Share ⎙ → Add to Home Screen',
     '',
-    "Songs stream from the cloud, so they don't fill up your phone's storage. Tap ♡ to save favourites, and use the Upload tab to add your own MP3s.",
+    `Songs stream from the cloud, so they don't fill up your phone's storage. Tap ♡ to save favourites${canUpload ? ', and use the Upload tab to add your own MP3s' : ''}.`,
     '',
     'Happy Listening !!',
   ].join('\n');
@@ -557,6 +649,14 @@ async function uploadFiles(files) {
 // ---------- boot ----------
 document.querySelectorAll('.screen > .footer-credit').forEach((el) => (el.innerHTML = $('#creditTpl').innerHTML));
 (async () => {
-  try { S.me = await api('/me'); afterLogin(); } catch { showLogin(); }
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Opened from the buddies' invite link (/join/<code>): sign this phone straight in.
+  const join = location.pathname.match(/^\/join\/([^/]+)/);
+  if (join) {
+    history.replaceState(null, '', '/');
+    try { S.me = await api('/join', { method: 'POST', body: { code: decodeURIComponent(join[1]) } }); afterLogin(); }
+    catch (err) { showLogin(); $('#loginError').textContent = err.message; }
+  } else {
+    try { S.me = await api('/me'); afterLogin(); } catch { showLogin(); }
+  }
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 })();

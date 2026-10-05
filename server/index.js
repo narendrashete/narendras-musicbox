@@ -4,11 +4,11 @@ import fs from 'node:fs';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
-import db from './db.js';
+import db, { getSetting, setSetting } from './db.js';
 import { PORT, HOST, APP_DIR, ALLOWED_TYPES, MAX_UPLOAD_MB, LIBRARY_DIR, DB_PATH } from './config.js';
 import { addFile, absPath, renameSong, scanLibrary, sniffType } from './library.js';
 import {
-  requireUser, requireAdmin, setSession, clearSession, publicUser,
+  requireUser, requireAdmin, setSession, clearSession, publicUser, sessionUser,
   hashPassword, checkPassword, randomPassword,
 } from './auth.js';
 
@@ -25,10 +25,43 @@ const logProblem = ({ userId = null, username = null, kind, songId = null, detai
 
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
+// ---------- buddies' invite link ----------
+// One shared code (set by the admin, e.g. "MyBuddies") that anyone can use from a link like
+// /join/MyBuddies. Each phone that joins becomes its own anonymous "Buddy-xxxx" user, so favourites
+// and the dashboard keep working per person, without anyone choosing a username or password.
+const joinCode = () => getSetting('join_code') || '';
+const codeOk = (code) => !!joinCode() && String(code || '').trim().toLowerCase() === joinCode().toLowerCase();
+
+function createBuddy(res) {
+  let username;
+  do { username = `Buddy-${randomPassword().slice(0, 5)}`; } while (db.prepare('SELECT 1 FROM users WHERE username = ?').get(username));
+  const { lastInsertRowid } = db.prepare(`INSERT INTO users (username, password_hash, must_change_password, is_guest, last_login, last_seen)
+    VALUES (?, ?, 0, 1, datetime('now'), datetime('now'))`).run(username, hashPassword(randomPassword()));
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(lastInsertRowid);
+  setSession(res, user);
+  return user;
+}
+
+// The link opens the normal app page; the app then calls /api/join. Doing the sign-up from the
+// page's script (not on GET) keeps WhatsApp/LinkedIn link-preview bots from counting as buddies.
+app.get('/join/:code', (req, res) => res.sendFile(path.join(APP_DIR, 'public', 'index.html')));
+
+app.post('/api/join', (req, res) => {
+  if (!codeOk(req.body?.code)) {
+    logProblem({ username: String(req.body?.code || '').slice(0, 40), kind: 'login_bad_invite', req });
+    return res.status(401).json({ error: 'This invite link has expired. Ask Narendra for a new one.' });
+  }
+  const existing = sessionUser(req)?.user; // tapping the link again on the same phone isn't a new buddy
+  res.json(publicUser(existing || createBuddy(res)));
+});
+
 // ---------- auth ----------
 app.post('/api/login', (req, res) => {
   const { username = '', password = '' } = req.body || {};
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username.trim());
+  // Typing the invite code as both username and password works too (e.g. the iPhone home-screen
+  // app, which doesn't share Safari's sign-in).
+  if (!user && codeOk(username) && codeOk(password)) return res.json(publicUser(createBuddy(res)));
   if (!user || !checkPassword(password, user.password_hash)) {
     logProblem({ userId: user?.id, username: username.trim().slice(0, 40), kind: user ? 'login_wrong_password' : 'login_unknown_user', req });
     return res.status(401).json({ error: 'Wrong username or password' });
@@ -43,8 +76,18 @@ app.post('/api/logout', (req, res) => { clearSession(res); res.json({ ok: true }
 app.use('/api', requireUser);
 
 app.get('/api/me', (req, res) => res.json(publicUser(req.user)));
+// So anyone already in can pass the invite link on.
+app.get('/api/invite', (req, res) => res.json({ code: joinCode() }));
+
+// Buddies can tell us their name (optional) so the dashboard shows more than "Buddy-xxxx".
+app.put('/api/me/name', (req, res) => {
+  const name = String(req.body?.name || '').trim().replace(/\s+/g, ' ').slice(0, 40) || null;
+  db.prepare('UPDATE users SET name = ? WHERE id = ?').run(name, req.user.id);
+  res.json({ name });
+});
 
 app.post('/api/me/password', (req, res) => {
+  if (req.user.is_guest) return res.status(403).json({ error: 'Buddies sign in with the invite link' });
   const { current, next } = req.body || {};
   if (!checkPassword(current || '', req.user.password_hash)) return res.status(400).json({ error: 'Current password is wrong' });
   if (!next || next.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters' });
@@ -123,7 +166,10 @@ const upload = multer({
   fileFilter: (req, file, cb) => cb(null, !!ALLOWED_TYPES[path.extname(file.originalname).toLowerCase()]),
 });
 
-app.post('/api/songs', upload.single('file'), wrap(async (req, res) => {
+// The invite link can end up anywhere (WhatsApp status, LinkedIn), so buddies listen but don't upload.
+const noGuests = (req, res, next) => (req.user.is_guest ? res.status(403).json({ error: 'Uploads are for invited members only' }) : next());
+
+app.post('/api/songs', noGuests, upload.single('file'), wrap(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Only MP3 or M4A files are allowed' });
   try {
     const { song, duplicate } = await addFile(req.file.path, {
@@ -172,7 +218,7 @@ app.delete('/api/categories/:id', requireAdmin, (req, res) => {
 
 // ---------- admin: users ----------
 app.get('/api/users', requireAdmin, (req, res) => {
-  res.json(db.prepare('SELECT id, username, is_admin, created_at FROM users ORDER BY username').all());
+  res.json(db.prepare('SELECT id, username, is_admin, created_at FROM users WHERE is_guest = 0 ORDER BY username').all());
 });
 app.post('/api/users', requireAdmin, (req, res) => {
   const username = String(req.body?.username || '').trim();
@@ -242,6 +288,14 @@ app.get('/api/admin/health', requireAdmin, wrap(async (req, res) => {
   res.json(out);
 }));
 
+app.get('/api/admin/join', requireAdmin, (req, res) => res.json({ code: joinCode() }));
+app.put('/api/admin/join', requireAdmin, (req, res) => {
+  const code = String(req.body?.code || '').trim();
+  if (code && !/^[\w-]{4,40}$/.test(code)) return res.status(400).json({ error: 'Invite code: 4-40 letters, numbers, _ or -' });
+  setSetting('join_code', code);
+  res.json({ code });
+});
+
 // ---------- admin: usage dashboard ----------
 app.get('/api/admin/stats', requireAdmin, (req, res) => {
   const days = [7, 30, 90, 365].includes(Number(req.query.days)) ? Number(req.query.days) : 30;
@@ -249,7 +303,7 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
   const all = (sql, ...p) => db.prepare(sql).all(...p);
 
   const users = all(`
-    SELECT u.id, u.username, u.is_admin, u.must_change_password, u.created_at, u.last_login, u.last_seen,
+    SELECT u.id, u.username, u.name, u.is_admin, u.is_guest, u.must_change_password, u.created_at, u.last_login, u.last_seen,
       (SELECT COUNT(*) FROM plays p WHERE p.user_id = u.id AND p.created_at >= datetime('now', ?)) AS plays,
       (SELECT COALESCE(SUM(seconds), 0) FROM plays p WHERE p.user_id = u.id AND p.created_at >= datetime('now', ?)) AS seconds,
       (SELECT COUNT(*) FROM plays p WHERE p.user_id = u.id) AS plays_ever,
@@ -294,7 +348,10 @@ app.get('/api/admin/stats', requireAdmin, (req, res) => {
     SELECT (SELECT COUNT(*) FROM songs) AS songs, (SELECT COUNT(*) FROM users) AS users,
            (SELECT COUNT(*) FROM plays WHERE created_at >= datetime('now', ?)) AS plays,
            (SELECT COALESCE(SUM(seconds), 0) FROM plays WHERE created_at >= datetime('now', ?)) AS seconds,
-           (SELECT COUNT(*) FROM songs WHERE uploaded_by IS NOT NULL AND created_at >= datetime('now', ?)) AS uploads`).get(since, since, since);
+           (SELECT COUNT(*) FROM songs WHERE uploaded_by IS NOT NULL AND created_at >= datetime('now', ?)) AS uploads,
+           (SELECT COUNT(*) FROM users WHERE is_guest = 1) AS buddies,
+           (SELECT COUNT(*) FROM users WHERE is_guest = 1 AND created_at >= datetime('now', ?)) AS new_buddies,
+           (SELECT COUNT(*) FROM users WHERE last_seen >= datetime('now', '-5 minutes')) AS online`).get(since, since, since, since);
 
   res.json({ days, totals, users, topSongs, topArtists, daily, uploads, problems, brokenSongs });
 });

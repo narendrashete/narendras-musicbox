@@ -6,26 +6,32 @@
 <title>Narendra's Musicbox</title>
 <meta name="theme-color" content="#14111f">
 <meta name="description" content="Narendra's personal music library">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icons/icon-180.png">
+<!-- Link preview card when the invite link is shared on WhatsApp / Facebook / LinkedIn -->
+<meta property="og:title" content="Narendra's Musicbox 🎵">
+<meta property="og:description" content="Tap to start listening. No sign-up, no app store; songs stream without filling your phone.">
+<meta property="og:image" content="https://musicbox.narendrashete.com/icons/icon-512.png">
+<meta property="og:type" content="website">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Musicbox">
-<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="/app.css">
 </head>
 <body>
 
 <!-- Sign in -->
 <section id="login" class="screen center" hidden>
   <form id="loginForm" class="card auth">
-    <img src="icons/icon.svg" alt="" class="auth-logo">
+    <img src="/icons/icon.svg" alt="" class="auth-logo">
     <h1>Narendra's Musicbox</h1>
     <label>Username<input name="username" autocomplete="username" required></label>
     <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
     <p class="error" id="loginError"></p>
     <button class="btn primary">Sign in</button>
+    <p class="muted hint">Got here from Narendra's invite link? Type the invite code as both username and password.</p>
   </form>
   <div class="footer-credit"></div>
 </section>
@@ -46,7 +52,7 @@
 <!-- Main app -->
 <section id="app" class="screen" hidden>
   <header class="topbar">
-    <div class="brand"><img src="icons/icon.svg" alt=""><span>Narendra's <b>Musicbox</b></span></div>
+    <div class="brand"><img src="/icons/icon.svg" alt=""><span>Narendra's <b>Musicbox</b></span></div>
     <div class="search"><svg viewBox="0 0 24 24"><path d="M10 4a6 6 0 1 0 3.7 10.7l4.3 4.3 1.4-1.4-4.3-4.3A6 6 0 0 0 10 4Zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"/></svg>
       <input id="search" type="search" placeholder="Search songs or artists" autocomplete="off"></div>
   </header>
@@ -100,10 +106,10 @@
 <template id="creditTpl">
   <span class="credit-label">Developed by</span>
   <a class="credit" href="https://www.primecomputers.co.in" target="_blank" rel="noopener noreferrer">
-    <img class="credit-logo" src="prime-logo.png" alt="Prime Computers">
+    <img class="credit-logo" src="/prime-logo.png" alt="Prime Computers">
   </a>
 </template>
 
-<script src="app.js"></script>
+<script src="/app.js"></script>
 </body>
 </html>

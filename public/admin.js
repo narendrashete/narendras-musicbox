@@ -17,7 +17,7 @@ function ago(t) {
 const hours = (sec) => (sec < 3600 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} hr`);
 const KIND = {
   play_error: 'Song would not play', stall: 'Long buffering', upload_failed: 'Upload failed', js_error: 'App error',
-  login_wrong_password: 'Wrong password', login_unknown_user: 'Unknown username',
+  login_wrong_password: 'Wrong password', login_unknown_user: 'Unknown username', login_bad_invite: 'Old / wrong invite link',
 };
 const device = (ua = '') => {
   const os = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac/.test(ua) ? 'Mac' : '';
@@ -70,16 +70,17 @@ function dailyChart(daily, days) {
 
 function render(d) {
   const active = d.users.filter((u) => status(u)[0] === 'active').length;
-  const changed = d.users.filter((u) => !u.must_change_password).length;
+  const members = d.users.filter((u) => !u.is_guest);
+  const changed = members.filter((u) => !u.must_change_password).length;
   const stuck = d.users.filter((u) => trouble(u).length).length;
   const probCount = d.problems.filter((p) => !p.kind.startsWith('login_')).length;
 
   const userRows = d.users.map((u) => {
     const [cls, label] = status(u);
     return `<tr>
-      <td><b>${esc(u.username)}</b>${u.is_admin ? ' <small class="dim">admin</small>' : ''}${trouble(u).map(([m, bad]) => `<span class="flag${bad ? ' bad' : ''}">${esc(m)}</span>`).join('')}</td>
+      <td><b>${esc(u.name || u.username)}</b>${u.name ? ` <small class="dim">${esc(u.username)}</small>` : ''}${u.is_admin ? ' <small class="dim">admin</small>' : ''}${u.is_guest ? ' <small class="dim">buddy</small>' : ''}${trouble(u).map(([m, bad]) => `<span class="flag${bad ? ' bad' : ''}">${esc(m)}</span>`).join('')}</td>
       <td><span class="pill ${cls}">${label}</span></td>
-      <td>${u.must_change_password ? '<span class="pill never">Not changed</span>' : '<span class="pill active">Changed</span>'}</td>
+      <td>${u.is_guest ? `<small>Invite link<br>joined ${ago(u.created_at)}</small>` : u.must_change_password ? '<span class="pill never">Not changed</span>' : '<span class="pill active">Changed</span>'}</td>
       <td>${ago(u.last_seen || u.last_login)}<br><small>${u.last_login ? `signed in ${ago(u.last_login)}` : ''}</small></td>
       <td class="num">${num(u.plays)}<br><small>${u.seconds ? hours(u.seconds) : ''}</small></td>
       <td>${u.last_song ? esc(u.last_song) : '<span class="dim">—</span>'}</td>
@@ -102,8 +103,10 @@ function render(d) {
 
   $('#main').innerHTML = `
   <div class="kpis">
+    <div class="kpi"><b>${num(d.totals.online)}</b><span>using the app right now (last 5 min)</span></div>
     <div class="kpi"><b>${active}<small class="dim"> / ${d.totals.users}</small></b><span>users active in last 3 days</span></div>
-    <div class="kpi ${changed < d.totals.users ? 'warn' : ''}"><b>${changed}<small class="dim"> / ${d.totals.users}</small></b><span>have set their own password</span></div>
+    <div class="kpi"><b>${num(d.totals.buddies)}<small class="dim"> +${num(d.totals.new_buddies)}</small></b><span>buddies joined via invite link (+ new in ${d.days} days)</span></div>
+    <div class="kpi ${changed < members.length ? 'warn' : ''}"><b>${changed}<small class="dim"> / ${members.length}</small></b><span>invited members who set their own password</span></div>
     <div class="kpi"><b>${num(d.totals.plays)}</b><span>songs played (${d.days} days)</span></div>
     <div class="kpi"><b>${hours(d.totals.seconds)}</b><span>listening time</span></div>
     <div class="kpi"><b>${num(d.totals.uploads)}</b><span>songs uploaded by users</span></div>

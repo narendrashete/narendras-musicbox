@@ -40,6 +40,8 @@ jobs:
           test "$(check http://127.0.0.1:4300/ | tail -1)" = 200
           test "$(check http://127.0.0.1:4300/manifest.webmanifest | tail -1)" = 200
           test "$(check http://127.0.0.1:4300/api/library | tail -1)" = 401
+          test "$(check http://127.0.0.1:4300/join/anything | tail -1)" = 200
+          test "$(check -X POST -H 'Content-Type: application/json' -d '{"code":"x"}' http://127.0.0.1:4300/api/join | tail -1)" = 401
           test "$(check -X POST -H 'Content-Type: application/json' -d '{"username":"x","password":"y"}' http://127.0.0.1:4300/api/login | tail -1)" = 401
           cat server.log
 
