@@ -171,7 +171,8 @@ main { padding: 8px 16px calc(var(--tabs-h) + var(--mini-h) + var(--safe-b) + 24
 .secret { font-family: ui-monospace, Consolas, monospace; background: var(--bg); padding: 10px; border-radius: 10px; user-select: all; word-break: break-all; }
 
 /* ---------- Prime Computers credit ---------- */
-.footer-credit { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 28px 0 8px; }
+.footer-credit { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; padding: 28px 0 8px; }
+.footer-credit .disclaimer { flex: 0 0 100%; box-sizing: border-box; padding: 0 max(16px, calc(50% - 280px)); margin: 4px 0 0; font-size: 11px; line-height: 1.5; text-align: center; color: var(--muted); }
 .footer-credit .credit-label { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 .footer-credit .credit { display: inline-flex; align-items: center; padding: 4px 9px; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.3); transition: transform .15s ease; }
 .footer-credit .credit:hover { transform: translateY(-1px); }
