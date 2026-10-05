@@ -591,7 +591,7 @@ function wireMore() {
   };
 }
 
-// Ready-to-send invites, in WhatsApp's formatting (*bold*). Both use the same script.
+// Ready-to-send invites, in WhatsApp's formatting (*bold*).
 function inviteMessage(username, password) {
   return inviteScript([
     `Open: ${location.origin}`,
@@ -599,11 +599,19 @@ function inviteMessage(username, password) {
     `Password: ${password} (it will ask you to set your own the first time)`,
   ]);
 }
+// Kept within WhatsApp status limits: 10 lines, 700 characters.
 function buddiesMessage(code) {
-  return inviteScript([
+  return [
+    "🎵 *Narendra's Musicbox*, your music collection",
+    '',
     `Tap to start listening, no sign-up needed: ${location.origin}/join/${encodeURIComponent(code)}`,
-    `(If it ever asks you to sign in, type *${code}* as both username and password)`,
-  ]);
+    `(If asked to sign in, type *${code}* as both username and password)`,
+    '',
+    '*Add it like an app:* Android: Chrome ⋮ → Add to Home screen. iPhone: Safari Share ⎙ → Add to Home Screen.',
+    '',
+    `Songs stream from the cloud, so no phone storage used. Upload your own MP3s too!`,
+    'Happy Listening !!',
+  ].join('\n');
 }
 function inviteScript(howToOpen) {
   return [
