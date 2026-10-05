@@ -24,6 +24,7 @@ const ICON = {
 const S = {
   me: null, songs: [], cats: [], byId: new Map(),
   tab: 'songs', sub: null, query: '',
+  spot: null, // song id from a "new song" WhatsApp link (/?song=<id>), shown on top of All songs
   queue: [], qi: -1,
   shuffle: store.get('mb.shuffle', false), repeat: store.get('mb.repeat', 'off'), // off | all | one
 };
@@ -88,6 +89,7 @@ async function afterLogin() {
   if (S.me.mustChangePassword) return showPwd(true);
   show('app');
   await loadLibrary();
+  if (S.byId.has(S.spot)) { S.tab = 'songs'; S.sub = null; S.query = ''; $('#search').value = ''; scrollTo(0, 0); }
   render();
   if (S.me.isGuest && !S.me.name && !store.get('mb.askedName', false)) askName();
 }
@@ -164,7 +166,10 @@ function render() {
   const q = S.query;
   if (S.tab === 'songs') {
     currentList = S.songs.filter(matches);
-    html = installBanner() + songsHead(q ? 'Search results' : 'All songs', currentList) + songRows(currentList);
+    const spot = !q && S.byId.get(S.spot);
+    html = installBanner() + (spot ? `<div class="panel spot"><div class="view-head"><h2>🎵 New song</h2>
+      <button class="icon-btn" data-act="nospot" aria-label="Hide">✕</button></div>${songRows([spot])}</div>` : '')
+      + songsHead(q ? 'Search results' : 'All songs', currentList) + songRows(currentList);
   } else if (S.tab === 'favourites') {
     currentList = S.songs.filter((s) => s.fav && matches(s));
     html = songsHead('Favourites', currentList) + (currentList.length || q ? songRows(currentList)
@@ -216,6 +221,7 @@ view.addEventListener('click', async (e) => {
   else if (act === 'newcat') newCategory();
   else if (act === 'install') { installPrompt?.prompt(); installPrompt = null; render(); }
   else if (act === 'noinstall') { store.set('mb.installHidden', true); render(); }
+  else if (act === 'nospot') { S.spot = null; render(); }
 });
 
 $('#tabs').addEventListener('click', (e) => {
@@ -465,6 +471,9 @@ function moreView() {
   ${S.me.isAdmin ? `
   <div class="panel"><h3>Categories</h3><div id="catAdmin"></div>
     <div class="inline"><input class="field" id="catName" placeholder="New category"><button class="btn small primary" id="catAdd">Add</button></div></div>
+  <div class="panel"><h3>Announce a new song</h3>
+    <p class="muted" style="margin:0">For people already using the app. The link opens the song at the top of the Songs page, ready to play.</p>
+    <select class="field" id="announceSong"></select><div id="announceShare"></div></div>
   <div class="panel"><h3>Invite link for buddies</h3>
     <p class="muted" style="margin:0">One link for everyone: WhatsApp status, groups, LinkedIn. Anyone who taps it is in straight away, with no username or password to set. Each phone shows up on the dashboard as its own buddy. Change the code to stop the old link from working; buddies already in stay in. Leave it empty to switch the link off.</p>
     <div class="inline"><input class="field" id="joinCode" placeholder="e.g. MyBuddies" autocapitalize="none"><button class="btn small primary" id="saveJoin">Save</button></div>
@@ -532,6 +541,18 @@ function wireMore() {
     $('#joinShare [data-copy]').onclick = () => copyText(msg);
   };
   api('/admin/join').then((r) => drawJoin(r.code)).catch(() => {});
+
+  const newest = [...S.songs].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id);
+  $('#announceSong').innerHTML = newest.map((s) => `<option value="${s.id}">${esc(s.title)} - ${esc(s.credits || s.artist)}</option>`).join('');
+  const drawAnnounce = () => {
+    const s = S.byId.get(Number($('#announceSong').value));
+    if (!s) { $('#announceShare').innerHTML = '<p class="muted" style="margin:0">No songs yet.</p>'; return; }
+    const msg = newSongMessage(s);
+    $('#announceShare').innerHTML = shareButtons(msg);
+    $('#announceShare [data-copy]').onclick = () => copyText(msg);
+  };
+  $('#announceSong').onchange = drawAnnounce;
+  drawAnnounce();
   $('#saveJoin').onclick = async () => {
     try { drawJoin((await api('/admin/join', { method: 'PUT', body: { code: $('#joinCode').value } })).code); toast('Invite link saved'); }
     catch (err) { toast(err.message); }
@@ -613,6 +634,18 @@ function buddiesMessage(code) {
     'Happy Listening !!',
   ].join('\n');
 }
+function newSongMessage(s) {
+  return [
+    "🎵 *New on Narendra's Musicbox*",
+    '',
+    `*${s.title}*`,
+    s.credits || s.artist,
+    '',
+    `Tap to play: ${location.origin}/?song=${s.id}`,
+    '',
+    'Happy Listening !!',
+  ].join('\n');
+}
 function inviteScript(howToOpen) {
   return [
     "🎵 *Narendra's Musicbox*, your music collection",
@@ -661,6 +694,8 @@ document.querySelectorAll('.screen > .footer-credit').forEach((el) => (el.innerH
 (async () => {
   // Opened from the buddies' invite link (/join/<code>): sign this phone straight in.
   const join = location.pathname.match(/^\/join\/([^/]+)/);
+  const song = Number(new URLSearchParams(location.search).get('song'));
+  if (song) { S.spot = song; history.replaceState(null, '', '/'); }
   if (join) {
     history.replaceState(null, '', '/');
     try { S.me = await api('/join', { method: 'POST', body: { code: decodeURIComponent(join[1]) } }); afterLogin(); }

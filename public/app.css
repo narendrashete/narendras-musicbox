@@ -181,3 +181,6 @@ main { padding: 8px 16px calc(var(--tabs-h) + var(--mini-h) + var(--safe-b) + 24
 .install { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin: 12px 0 4px; font-size: 14px; }
 .install span { flex: 1; }
 .auth .hint { font-size: 12px; text-align: center; margin: 0; }
+.spot { gap: 4px; }
+.spot .view-head { margin: 0; }
+.spot .list { margin: 0; }
