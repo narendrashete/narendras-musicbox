@@ -20,7 +20,7 @@ Personal music streaming app. It's a PWA, so it installs on Android ("Install ap
   signs anyone in with one tap: no username, no password change, and they stay signed in until
   they sign out. Typing the code as both username and password works too. Each phone becomes its
   own anonymous `Buddy-xxxx` user (with an optional name), so favourites and the dashboard still
-  work per person. Buddies can listen and share the link onward, but can't upload. Change the code to
+  work per person. Buddies can listen, upload and share the link onward. Change the code to
   retire an old link; empty switches it off.
 
 - **Usage dashboard** (admin only, `/admin.html` or Upload tab): who is active, how many are online right now, buddies joined via the invite link, most-played songs, user uploads, and a trouble log (failed sign-ins, songs that won't play, long buffering, failed uploads). Collected silently by the app; no user-facing changes.

@@ -87,7 +87,6 @@ $('#pwdForm').addEventListener('submit', async (e) => {
 async function afterLogin() {
   if (S.me.mustChangePassword) return showPwd(true);
   show('app');
-  $('#tabs [data-tab=more]').lastChild.textContent = S.me.isGuest ? 'Me' : 'Upload';
   await loadLibrary();
   render();
   if (S.me.isGuest && !S.me.name && !store.get('mb.askedName', false)) askName();
@@ -445,21 +444,24 @@ function newCategory() {
 }
 
 // ---------- upload / account / admin ----------
+const uploadPanel = () => `<div class="view-head"><h2>Upload songs</h2></div>
+  <div class="panel">
+    <label class="drop" id="drop"><input type="file" id="files" accept=".mp3,.m4a,audio/mpeg,audio/mp4" multiple>
+      <b>Tap to choose MP3 or M4A files</b><br><small>or drag them here · title &amp; artist are read from the file</small></label>
+    <ul class="uploads" id="uploads"></ul>
+  </div>
+`;
+
 function moreView() {
   if (S.me.isGuest) {
-    return `<div class="view-head"><h2>Me</h2></div>
+    return `${uploadPanel()}
     <div class="panel"><h3>Your name</h3><p class="muted" style="margin:0">So Narendra knows who's listening. Optional.</p>
       <div class="inline"><input class="field" id="myName" placeholder="Your name" maxlength="40" value="${esc(S.me.name || '')}"><button class="btn small primary" id="saveName">Save</button></div></div>
     ${sharePanel()}
     <div class="panel"><h3>Sign out</h3><p class="muted" style="margin:0">You'll need the invite link again to come back.</p>
       <button class="btn small danger" id="logout" style="align-self:flex-start">Sign out</button></div>`;
   }
-  return `<div class="view-head"><h2>Upload songs</h2></div>
-  <div class="panel">
-    <label class="drop" id="drop"><input type="file" id="files" accept=".mp3,.m4a,audio/mpeg,audio/mp4" multiple>
-      <b>Tap to choose MP3 or M4A files</b><br><small>or drag them here · title &amp; artist are read from the file</small></label>
-    <ul class="uploads" id="uploads"></ul>
-  </div>
+  return `${uploadPanel()}
   ${S.me.isAdmin ? `
   <div class="panel"><h3>Categories</h3><div id="catAdmin"></div>
     <div class="inline"><input class="field" id="catName" placeholder="New category"><button class="btn small primary" id="catAdd">Add</button></div></div>
@@ -510,15 +512,15 @@ function wireMore() {
     if (S.me.isGuest && !confirm("Sign out? You'll need the invite link again to come back.")) return;
     await api('/logout', { method: 'POST' }).catch(() => {}); S.me = null; showLogin();
   };
-  if (S.me.isGuest) {
-    $('#saveName').onclick = () => saveName($('#myName').value);
-    return;
-  }
   const input = $('#files'), drop = $('#drop');
   input.onchange = () => { uploadFiles([...input.files]); input.value = ''; };
   drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
   drop.ondragleave = () => drop.classList.remove('over');
   drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); uploadFiles([...e.dataTransfer.files]); };
+  if (S.me.isGuest) {
+    $('#saveName').onclick = () => saveName($('#myName').value);
+    return;
+  }
   $('#chPwd').onclick = () => showPwd(false);
   if (!S.me.isAdmin) return;
 
@@ -601,9 +603,9 @@ function buddiesMessage(code) {
   return inviteScript([
     `Tap to start listening, no sign-up needed: ${location.origin}/join/${encodeURIComponent(code)}`,
     `(If it ever asks you to sign in, type *${code}* as both username and password)`,
-  ], false);
+  ]);
 }
-function inviteScript(howToOpen, canUpload = true) {
+function inviteScript(howToOpen) {
   return [
     "🎵 *Narendra's Musicbox*, our family music collection",
     '',
@@ -613,7 +615,7 @@ function inviteScript(howToOpen, canUpload = true) {
     '• *Android (Chrome):* tap ⋮ (top right) → Install app / Add to Home screen',
     '• *iPhone:* open the link in Safari → tap Share ⎙ → Add to Home Screen',
     '',
-    `Songs stream from the cloud, so they don't fill up your phone's storage. Tap ♡ to save favourites${canUpload ? ', and use the Upload tab to add your own MP3s' : ''}.`,
+    `Songs stream from the cloud, so they don't fill up your phone's storage. Tap ♡ to save favourites, and use the Upload tab to add your own MP3s.`,
     '',
     'Happy Listening !!',
   ].join('\n');

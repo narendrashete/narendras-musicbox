@@ -166,10 +166,7 @@ const upload = multer({
   fileFilter: (req, file, cb) => cb(null, !!ALLOWED_TYPES[path.extname(file.originalname).toLowerCase()]),
 });
 
-// The invite link can end up anywhere (WhatsApp status, LinkedIn), so buddies listen but don't upload.
-const noGuests = (req, res, next) => (req.user.is_guest ? res.status(403).json({ error: 'Uploads are for invited members only' }) : next());
-
-app.post('/api/songs', noGuests, upload.single('file'), wrap(async (req, res) => {
+app.post('/api/songs', upload.single('file'), wrap(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Only MP3 or M4A files are allowed' });
   try {
     const { song, duplicate } = await addFile(req.file.path, {
