@@ -9,7 +9,7 @@ Personal music streaming app. It's a PWA, so it installs on Android ("Install ap
 - **Favourites** per user. **Categories** (Comedy, Dance, Spiritual…) are created by the admin
   and assigned from the ✎ button on any song. Admin can also fix a song's title/artist, and
   the file moves to the matching folder.
-- **Lyrics** (optional): the admin pastes them in from the ✎ button on a song. Songs that have them
+- **Lyrics** (optional): a mentor or the admin pastes them in from the ✎ button on a song. Songs that have them
   show a small *Lyrics* tag, and the full player gets a **Lyrics** button. It's off until someone taps it;
   then lyrics take the cover's place on phones (side by side on wide screens) and stay on for every song
   that has them, until tapped off. Playback isn't affected either way.
@@ -18,7 +18,7 @@ Personal music streaming app. It's a PWA, so it installs on Android ("Install ap
   more formats later, add them to `ALLOWED_TYPES` in `server/config.js`.
 - **Community mentors**: uploads stay hidden from everyone until a mentor approves them (Upload →
   *Waiting for approval*). The admin is always a mentor and can make others mentors with *Make mentor*
-  under *People who can use the app*. Mentors can also delete any song (🗑 on the song; the admin uses ✎ → Delete).
+  under *People who can use the app*. Mentors can also delete any song and add or fix its lyrics (✎ on the song).
 - **Users**: no self sign-up. The admin adds people under Upload → *People who can use the app*
   and each gets a one-time password that they must change on first sign-in. A **Send on WhatsApp**
   button (plus **Copy message**) prepares the full invite: link, username, password and install steps.

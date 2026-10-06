@@ -202,14 +202,18 @@ app.delete('/api/songs/:id', requireMentor, (req, res) => {
   res.json({ ok: true });
 });
 
+// Lyrics can be added or fixed by any mentor (and the admin); empty removes them.
+app.put('/api/songs/:id/lyrics', requireMentor, (req, res) => {
+  const lyrics = String(req.body?.lyrics ?? '').replace(/\r\n?/g, '\n').trim().slice(0, 20000) || null;
+  if (!db.prepare('UPDATE songs SET lyrics = ? WHERE id = ?').run(lyrics, req.params.id).changes) return res.status(404).json({ error: 'Not found' });
+  res.json(getSong(req.params.id, req.user.id));
+});
+
 // ---------- admin: song details + categories ----------
 app.patch('/api/songs/:id', requireAdmin, (req, res) => {
-  const { title, artist, cats, lyrics } = req.body || {};
+  const { title, artist, cats } = req.body || {};
   if (title !== undefined || artist !== undefined) {
     if (!renameSong(req.params.id, { title, artist })) return res.status(404).json({ error: 'Not found' });
-  }
-  if (typeof lyrics === 'string') {
-    db.prepare('UPDATE songs SET lyrics = ? WHERE id = ?').run(lyrics.replace(/\r\n?/g, '\n').trim().slice(0, 20000) || null, req.params.id);
   }
   if (Array.isArray(cats)) {
     db.exec('BEGIN');

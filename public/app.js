@@ -150,8 +150,7 @@ function songRows(list) {
         <span class="r-sub">${esc(s.credits || s.artist)}${s.album ? ` · ${esc(s.album)}` : ''}</span></button>
       ${s.has_lyrics ? '<span class="tag">Lyrics</span>' : ''}<span class="dur">${s.duration ? fmt(s.duration) : ''}</span>
       <button class="icon-btn fav${s.fav ? ' on' : ''}" data-act="fav" aria-label="Favourite">${s.fav ? ICON.heart : ICON.heartO}</button>
-      ${S.me.isAdmin ? `<button class="icon-btn" data-act="edit" aria-label="Edit">${ICON.edit}</button>`
-        : S.me.isMentor ? `<button class="icon-btn" data-act="del" aria-label="Delete">${ICON.trash}</button>` : ''}
+      ${S.me.isMentor ? `<button class="icon-btn" data-act="edit" aria-label="Edit">${ICON.edit}</button>` : ''}
     </li>`).join('')}</ul>`;
 }
 
@@ -228,7 +227,6 @@ view.addEventListener('click', async (e) => {
   else if (act === 'install') { installPrompt?.prompt(); installPrompt = null; render(); }
   else if (act === 'noinstall') { store.set('mb.installHidden', true); render(); }
   else if (act === 'nospot') { S.spot = null; render(); }
-  else if (act === 'del') deleteSong(id);
   else if (act === 'review') { S.tab = 'more'; S.sub = null; render(); $('#pendingPanel')?.scrollIntoView(); }
 });
 
@@ -464,13 +462,15 @@ function catChecks(selected) {
   return `<div class="checks">${S.cats.map((c) => `<label><input type="checkbox" value="${c.id}"${selected.includes(c.id) ? ' checked' : ''}><span>${esc(c.name)}</span></label>`).join('')}</div>`;
 }
 
+// The admin edits everything; mentors get the lyrics (and Delete) only.
 function editSong(id) {
-  const s = S.byId.get(id);
-  const el = openSheet(`<h3>Edit song</h3>
+  const s = S.byId.get(id), admin = S.me.isAdmin;
+  const el = openSheet(`<h3>Edit song</h3>${admin ? `
     <label>Title<input class="field" name="title" value="${esc(s.title)}"></label>
     <label>Artist (first name = folder; separate several with commas)<input class="field" name="artist" value="${esc(s.credits || s.artist)}"></label>
     <div><label>Categories</label>${S.cats.length ? catChecks(s.cats) : '<p class="muted">No categories yet.</p>'}</div>
-    <div class="inline"><input class="field" name="newcat" placeholder="New category, e.g. Spiritual"><button class="btn small ghost" data-add>Add</button></div>
+    <div class="inline"><input class="field" name="newcat" placeholder="New category, e.g. Spiritual"><button class="btn small ghost" data-add>Add</button></div>`
+    : `<p style="margin:0"><b>${esc(s.title)}</b><br><span class="muted">${esc(s.credits || s.artist)}</span></p>`}
     <label>Lyrics (optional: paste them in, one line per line; leave empty if none)<textarea class="field" name="lyrics" rows="8" placeholder="Loading…" disabled></textarea></label>
     <p class="muted" style="font-size:12px;margin:0">${s.uploaded_by ? `Uploaded by ${esc(s.uploaded_by)}` : 'Imported from the original collection'}</p>
     <p class="error"></p>
@@ -480,7 +480,7 @@ function editSong(id) {
   const lyr = $('[name=lyrics]', el);
   api(`/songs/${id}/lyrics`).then((r) => { lyrics = r.lyrics; lyr.value = lyrics; lyr.disabled = false; lyr.placeholder = 'No lyrics yet'; })
     .catch(() => { lyr.placeholder = "Couldn't load the lyrics"; });
-  $('[data-add]', el).onclick = async () => {
+  if (admin) $('[data-add]', el).onclick = async () => {
     const name = $('[name=newcat]', el).value.trim(); if (!name) return;
     const cat = await api('/categories', { method: 'POST', body: { name } });
     if (!S.cats.some((c) => c.id === cat.id)) S.cats.push(cat);
@@ -491,13 +491,17 @@ function editSong(id) {
   };
   $('[data-save]', el).onclick = async () => {
     try {
-      const body = { cats: [...el.querySelectorAll('.checks input:checked')].map((i) => Number(i.value)) };
-      const title = $('[name=title]', el).value.trim(), artist = $('[name=artist]', el).value.trim();
-      if (title !== s.title) body.title = title;
-      if (artist !== (s.credits || s.artist)) body.artist = artist;
-      if (lyrics !== null && lyr.value.trim() !== lyrics.trim()) body.lyrics = lyr.value;
-      Object.assign(s, await api(`/songs/${id}`, { method: 'PATCH', body }));
-      if (body.lyrics !== undefined) { lyricsCache.delete(id); if (lyricsFor === id) lyricsFor = null; }
+      if (admin) {
+        const body = { cats: [...el.querySelectorAll('.checks input:checked')].map((i) => Number(i.value)) };
+        const title = $('[name=title]', el).value.trim(), artist = $('[name=artist]', el).value.trim();
+        if (title !== s.title) body.title = title;
+        if (artist !== (s.credits || s.artist)) body.artist = artist;
+        Object.assign(s, await api(`/songs/${id}`, { method: 'PATCH', body }));
+      }
+      if (lyrics !== null && lyr.value.trim() !== lyrics.trim()) {
+        Object.assign(s, await api(`/songs/${id}/lyrics`, { method: 'PUT', body: { lyrics: lyr.value } }));
+        lyricsCache.delete(id); if (lyricsFor === id) lyricsFor = null;
+      }
       closeSheet(); render(); syncPlayerUi(); toast('Saved');
     } catch (err) { $('.error', el).textContent = err.message; }
   };
