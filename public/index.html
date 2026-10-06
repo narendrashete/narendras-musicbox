@@ -81,8 +81,11 @@
 <section id="player" class="player" hidden>
   <button class="icon-btn close" id="playerClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="m12 15.4-6-6L7.4 8l4.6 4.6L16.6 8 18 9.4l-6 6Z"/></svg></button>
   <div class="big-art" id="bigArt"></div>
+  <!-- Optional lyrics: takes the cover's place on phones, sits beside the controls on wide screens -->
+  <div class="lyrics" id="lyrics" hidden><div class="lyrics-text" id="lyricsText"></div></div>
   <div class="now">
     <div class="now-txt"><h2 id="pTitle"></h2><p id="pArtist"></p></div>
+    <button class="lyrics-btn" id="pLyrics" aria-pressed="false" hidden>Lyrics</button>
     <button class="icon-btn fav" id="pFav" aria-label="Favourite"></button>
   </div>
   <input type="range" id="seek" min="0" max="100" step="0.1" value="0">

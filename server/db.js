@@ -86,6 +86,8 @@ if (!userCols.includes('is_mentor')) db.exec('ALTER TABLE users ADD COLUMN is_me
 // Uploads from non-mentors wait here (approved = 0) and stay hidden until a mentor approves them.
 const songCols = db.prepare('PRAGMA table_info(songs)').all().map((c) => c.name);
 if (!songCols.includes('approved')) db.exec('ALTER TABLE songs ADD COLUMN approved INTEGER NOT NULL DEFAULT 1');
+// Optional plain-text lyrics, pasted in by the admin. Most songs have none.
+if (!songCols.includes('lyrics')) db.exec('ALTER TABLE songs ADD COLUMN lyrics TEXT');
 
 export const getSetting = (key) => db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? null;
 export const setSetting = (key, value) => db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);

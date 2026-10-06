@@ -98,11 +98,12 @@ app.post('/api/me/password', (req, res) => {
 // ---------- library ----------
 const songSelect = `
   SELECT s.id, s.title, s.artist, s.credits, s.album, s.duration, s.created_at, s.approved = 0 AS pending,
+         COALESCE(s.lyrics, '') <> '' AS has_lyrics,
          u.username AS uploaded_by,
          EXISTS (SELECT 1 FROM favorites f WHERE f.song_id = s.id AND f.user_id = @uid) AS fav,
          (SELECT group_concat(sc.category_id) FROM song_categories sc WHERE sc.song_id = s.id) AS cats
   FROM songs s LEFT JOIN users u ON u.id = s.uploaded_by`;
-const shapeSong = (r) => ({ ...r, fav: !!r.fav, pending: !!r.pending, cats: r.cats ? r.cats.split(',').map(Number) : [] });
+const shapeSong = (r) => ({ ...r, fav: !!r.fav, pending: !!r.pending, has_lyrics: !!r.has_lyrics, cats: r.cats ? r.cats.split(',').map(Number) : [] });
 const getSong = (id, uid) => {
   const r = db.prepare(`${songSelect} WHERE s.id = @id`).get({ id, uid });
   return r && shapeSong(r);
@@ -130,6 +131,13 @@ app.get('/api/songs/:id/stream', (req, res) => {
     acceptRanges: true, dotfiles: 'allow',
     headers: { 'Content-Type': mime, 'Cache-Control': 'private, no-store' },
   }, (err) => { if (err && !res.headersSent) res.status(err.statusCode || 500).end(); });
+});
+
+// Lyrics are fetched only when someone opens them, so the library list stays small.
+app.get('/api/songs/:id/lyrics', (req, res) => {
+  const song = db.prepare('SELECT lyrics, approved FROM songs WHERE id = ?').get(req.params.id);
+  if (!song || (!song.approved && !isMentor(req.user))) return res.status(404).json({ error: 'Not found' });
+  res.json({ lyrics: song.lyrics || '' });
 });
 
 // One row per song someone actually listened to (the app reports it after ~20s of playback).
@@ -196,9 +204,12 @@ app.delete('/api/songs/:id', requireMentor, (req, res) => {
 
 // ---------- admin: song details + categories ----------
 app.patch('/api/songs/:id', requireAdmin, (req, res) => {
-  const { title, artist, cats } = req.body || {};
+  const { title, artist, cats, lyrics } = req.body || {};
   if (title !== undefined || artist !== undefined) {
     if (!renameSong(req.params.id, { title, artist })) return res.status(404).json({ error: 'Not found' });
+  }
+  if (typeof lyrics === 'string') {
+    db.prepare('UPDATE songs SET lyrics = ? WHERE id = ?').run(lyrics.replace(/\r\n?/g, '\n').trim().slice(0, 20000) || null, req.params.id);
   }
   if (Array.isArray(cats)) {
     db.exec('BEGIN');

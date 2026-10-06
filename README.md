@@ -9,6 +9,10 @@ Personal music streaming app. It's a PWA, so it installs on Android ("Install ap
 - **Favourites** per user. **Categories** (Comedy, Dance, Spiritual…) are created by the admin
   and assigned from the ✎ button on any song. Admin can also fix a song's title/artist, and
   the file moves to the matching folder.
+- **Lyrics** (optional): the admin pastes them in from the ✎ button on a song. Songs that have them
+  show a small *Lyrics* tag, and the full player gets a **Lyrics** button. It's off until someone taps it;
+  then lyrics take the cover's place on phones (side by side on wide screens) and stay on for every song
+  that has them, until tapped off. Playback isn't affected either way.
 - **Upload**: any signed-in user can upload MP3s (the real file type is checked, not just the
   extension). Title/artist come from the ID3 tags and exact duplicates are detected. To allow
   more formats later, add them to `ALLOWED_TYPES` in `server/config.js`.

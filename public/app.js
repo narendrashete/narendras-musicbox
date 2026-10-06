@@ -28,6 +28,7 @@ const S = {
   spot: null, // song id from a "new song" WhatsApp link (/?song=<id>), shown on top of All songs
   queue: [], qi: -1,
   shuffle: store.get('mb.shuffle', false), repeat: store.get('mb.repeat', 'off'), // off | all | one
+  lyricsOn: store.get('mb.lyrics', false), // off until someone taps Lyrics; then stays on for songs that have them
 };
 
 // ---------- api ----------
@@ -147,7 +148,7 @@ function songRows(list) {
       <span class="art" style="${artStyle(s.artist)}">${esc(initial(s.artist))}</span>
       <button class="r-main" data-act="play"><span class="r-title">${esc(s.title)}</span>
         <span class="r-sub">${esc(s.credits || s.artist)}${s.album ? ` · ${esc(s.album)}` : ''}</span></button>
-      <span class="dur">${s.duration ? fmt(s.duration) : ''}</span>
+      ${s.has_lyrics ? '<span class="tag">Lyrics</span>' : ''}<span class="dur">${s.duration ? fmt(s.duration) : ''}</span>
       <button class="icon-btn fav${s.fav ? ' on' : ''}" data-act="fav" aria-label="Favourite">${s.fav ? ICON.heart : ICON.heartO}</button>
       ${S.me.isAdmin ? `<button class="icon-btn" data-act="edit" aria-label="Edit">${ICON.edit}</button>`
         : S.me.isMentor ? `<button class="icon-btn" data-act="del" aria-label="Delete">${ICON.trash}</button>` : ''}
@@ -362,8 +363,27 @@ function syncPlayerUi() {
   $('#pFav').innerHTML = s.fav ? ICON.heart : ICON.heartO; $('#pFav').classList.toggle('on', s.fav);
   $('#pShuffle').classList.toggle('on', S.shuffle);
   $('#pRepeat').classList.toggle('on', S.repeat !== 'off'); $('#pRepeat').dataset.mode = S.repeat;
+  syncLyrics(s);
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
 }
+
+// ---------- lyrics (optional; the player works exactly the same without them) ----------
+const lyricsCache = new Map(); // song id -> text, fetched the first time they're opened
+let lyricsFor = null;
+function syncLyrics(s) {
+  const show = s.has_lyrics && S.lyricsOn;
+  $('#pLyrics').hidden = !s.has_lyrics; $('#pLyrics').setAttribute('aria-pressed', String(show));
+  $('#player').classList.toggle('show-lyrics', show); $('#lyrics').hidden = !show;
+  if (!show || lyricsFor === s.id) return;
+  lyricsFor = s.id; $('#lyrics').scrollTop = 0;
+  const box = $('#lyricsText');
+  const fill = (text) => { if (lyricsFor === s.id) { box.textContent = text; box.classList.remove('muted'); } };
+  if (lyricsCache.has(s.id)) return fill(lyricsCache.get(s.id));
+  box.textContent = 'Loading lyrics…'; box.classList.add('muted');
+  api(`/songs/${s.id}/lyrics`).then(({ lyrics }) => { lyricsCache.set(s.id, lyrics); fill(lyrics); })
+    .catch(() => { if (lyricsFor === s.id) { box.textContent = "Couldn't load the lyrics."; lyricsFor = null; } });
+}
+$('#pLyrics').onclick = () => { S.lyricsOn = !S.lyricsOn; store.set('mb.lyrics', S.lyricsOn); syncPlayerUi(); };
 
 let seeking = false;
 audio.addEventListener('timeupdate', () => {
@@ -451,10 +471,15 @@ function editSong(id) {
     <label>Artist (first name = folder; separate several with commas)<input class="field" name="artist" value="${esc(s.credits || s.artist)}"></label>
     <div><label>Categories</label>${S.cats.length ? catChecks(s.cats) : '<p class="muted">No categories yet.</p>'}</div>
     <div class="inline"><input class="field" name="newcat" placeholder="New category, e.g. Spiritual"><button class="btn small ghost" data-add>Add</button></div>
+    <label>Lyrics (optional: paste them in, one line per line; leave empty if none)<textarea class="field" name="lyrics" rows="8" placeholder="Loading…" disabled></textarea></label>
     <p class="muted" style="font-size:12px;margin:0">${s.uploaded_by ? `Uploaded by ${esc(s.uploaded_by)}` : 'Imported from the original collection'}</p>
     <p class="error"></p>
     <div class="actions"><button class="btn danger" data-del style="margin-right:auto">Delete</button><button class="btn ghost" data-close>Cancel</button><button class="btn primary" data-save>Save</button></div>`);
   $('[data-del]', el).onclick = () => deleteSong(id);
+  let lyrics = null; // only sent back if it could be loaded, so a failed load never wipes them
+  const lyr = $('[name=lyrics]', el);
+  api(`/songs/${id}/lyrics`).then((r) => { lyrics = r.lyrics; lyr.value = lyrics; lyr.disabled = false; lyr.placeholder = 'No lyrics yet'; })
+    .catch(() => { lyr.placeholder = "Couldn't load the lyrics"; });
   $('[data-add]', el).onclick = async () => {
     const name = $('[name=newcat]', el).value.trim(); if (!name) return;
     const cat = await api('/categories', { method: 'POST', body: { name } });
@@ -470,7 +495,9 @@ function editSong(id) {
       const title = $('[name=title]', el).value.trim(), artist = $('[name=artist]', el).value.trim();
       if (title !== s.title) body.title = title;
       if (artist !== (s.credits || s.artist)) body.artist = artist;
+      if (lyrics !== null && lyr.value.trim() !== lyrics.trim()) body.lyrics = lyr.value;
       Object.assign(s, await api(`/songs/${id}`, { method: 'PATCH', body }));
+      if (body.lyrics !== undefined) { lyricsCache.delete(id); if (lyricsFor === id) lyricsFor = null; }
       closeSheet(); render(); syncPlayerUi(); toast('Saved');
     } catch (err) { $('.error', el).textContent = err.message; }
   };
