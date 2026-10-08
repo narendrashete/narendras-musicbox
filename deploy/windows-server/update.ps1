@@ -35,6 +35,9 @@ function Install-Release($src) {
     & robocopy $src $App /MIR /XF .env /XD node_modules initial-data /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed ($LASTEXITCODE)" }
     Push-Location $App
+    # npm writes "npm notice ..." lines to stderr even when it succeeds; with 'Stop' PowerShell 5.1
+    # turns those into a thrown error, so judge npm by its exit code only.
+    $ErrorActionPreference = 'Continue'
     try { & "$NodeDir\npm.cmd" ci --omit=dev --no-audit --no-fund 2>&1 | Out-Null; if ($LASTEXITCODE) { throw 'npm ci failed' } } finally { Pop-Location }
 }
 
