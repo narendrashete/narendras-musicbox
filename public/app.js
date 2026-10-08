@@ -774,6 +774,7 @@ function newSongMessage(s, code) {
     s.credits || s.artist,
     '',
     `Tap to play: ${link}`,
+    ...(code ? [`(First time here? If it asks you to sign in, type *${code}* as both username and password, and the song will open for you.)`] : []),
     '',
     'Happy Listening !!',
   ].join('\n');
