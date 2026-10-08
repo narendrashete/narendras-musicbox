@@ -134,6 +134,9 @@ main { padding: 8px 16px calc(var(--tabs-h) + var(--mini-h) + var(--safe-b) + 24
 .controls #pShuffle:not(.on), .controls #pRepeat:not(.on) { color: var(--muted); }
 .play-big { width: 72px; height: 72px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; color: #fff; box-shadow: 0 10px 30px rgba(230,69,122,.4); }
 .play-big svg { width: 36px; height: 36px; }
+/* Opened from a shared song link but the browser blocked autoplay: nudge towards the one tap it needs */
+.play-big.nudge { animation: nudge 1.4s ease-in-out infinite; }
+@keyframes nudge { 0%, 100% { transform: scale(1); box-shadow: 0 10px 30px rgba(230,69,122,.4); } 50% { transform: scale(1.12); box-shadow: 0 0 0 14px rgba(230,69,122,.18); } }
 .buffer { text-align: center; font-size: 12px; min-height: 1em; margin: 0; }
 /* Lyrics (optional, only on songs that have them) */
 .lyrics-btn { flex: none; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13px; color: var(--muted); }

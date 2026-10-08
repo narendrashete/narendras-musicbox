@@ -91,9 +91,22 @@ async function afterLogin() {
   if (S.me.mustChangePassword) return showPwd(true);
   show('app');
   await loadLibrary();
-  if (S.byId.has(S.spot)) { S.tab = 'songs'; S.sub = null; S.query = ''; $('#search').value = ''; scrollTo(0, 0); }
+  const spot = S.byId.get(S.spot);
+  if (spot) { S.tab = 'songs'; S.sub = null; S.query = ''; $('#search').value = ''; scrollTo(0, 0); }
   render();
+  if (spot) return openSharedSong(spot);
   if (S.me.isGuest && !S.me.name && !store.get('mb.askedName', false)) askName();
+}
+
+// Opened from a shared song link: straight into the full player, lyrics showing if the song has
+// them, then the rest of the library. Browsers often block sound until the first tap on a page,
+// so if it won't start by itself the play button pulses for that one tap.
+async function openSharedSong(s) {
+  if (s.has_lyrics) S.lyricsOn = true; // just for this visit; their own Lyrics on/off choice stays saved
+  $('#player').hidden = false;
+  const ids = S.songs.map((x) => x.id);
+  const started = await playList(ids, ids.indexOf(s.id), false);
+  if (!started && audio.paused) { $('#pPlay').classList.add('nudge'); toast('Tap ▶ to play'); }
 }
 
 // Optional and skippable: just so the dashboard shows "Ramesh" instead of "Buddy-x7Kq2".
@@ -262,7 +275,7 @@ function playList(ids, index, shuffle = S.shuffle) {
     if (!S.shuffle) { S.shuffle = true; store.set('mb.shuffle', true); }
   }
   S.queue = ids; S.qi = Math.max(0, index);
-  load(true);
+  return load(true);
 }
 
 // ---------- usage + trouble reporting (feeds the admin dashboard) ----------
@@ -323,7 +336,7 @@ function load(autoplay) {
   if (playingUrl) pre.id = pre.url = pre.ctrl = null; else dropPrefetch();
   audio.src = playingUrl || `/api/songs/${s.id}/stream`; // streamed in chunks via HTTP Range; nothing saved on the phone
   if (old) URL.revokeObjectURL(old);
-  if (autoplay) audio.play().catch(() => {});
+  const started = autoplay ? audio.play().then(() => true, () => false) : Promise.resolve(false);
   $('#mini').hidden = false;
   syncPlayerUi();
   if (S.tab !== 'more') render();
@@ -333,6 +346,7 @@ function load(autoplay) {
       artwork: [{ src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
     });
   }
+  return started;
 }
 
 function next(auto = false) {
@@ -408,7 +422,7 @@ audio.addEventListener('waiting', () => {
   const id = S.queue[S.qi];
   stallTimer = setTimeout(() => { if (audio.readyState < 3 && !audio.paused) reportProblem('stall', id, 'Buffering for over 10 seconds'); }, 10000);
 });
-audio.addEventListener('playing', () => clearTimeout(stallTimer));
+audio.addEventListener('playing', () => { clearTimeout(stallTimer); $('#pPlay').classList.remove('nudge'); });
 audio.addEventListener('play', syncPlayerUi);
 audio.addEventListener('pause', syncPlayerUi);
 audio.addEventListener('ended', () => { flushListen(); next(true); });
@@ -565,7 +579,7 @@ function moreView() {
   <div class="panel"><h3>Categories</h3><div id="catAdmin"></div>
     <div class="inline"><input class="field" id="catName" placeholder="New category"><button class="btn small primary" id="catAdd">Add</button></div></div>
   <div class="panel"><h3>Announce a new song</h3>
-    <p class="muted" style="margin:0">For people already using the app. The link opens the song at the top of the Songs page, ready to play.</p>
+    <p class="muted" style="margin:0">The link opens the song in the player and starts it, with the lyrics showing if it has them. While the invite link below is on, friends who aren't using the app yet get in with the same tap.</p>
     <select class="field" id="announceSong"></select><div id="announceShare"></div></div>
   <div class="panel"><h3>Invite link for buddies</h3>
     <p class="muted" style="margin:0">One link for everyone: WhatsApp status, groups, LinkedIn. Anyone who taps it is in straight away, with no username or password to set. Each phone shows up on the dashboard as its own buddy. Change the code to stop the old link from working; buddies already in stay in. Leave it empty to switch the link off.</p>
@@ -642,8 +656,10 @@ function wireMore() {
   }
   if (!S.me.isAdmin) return;
 
+  let inviteCode = '';
   const drawJoin = (code) => {
-    $('#joinCode').value = code;
+    $('#joinCode').value = inviteCode = code;
+    drawAnnounce();
     if (!code) { $('#joinShare').innerHTML = '<p class="muted" style="margin:0">Invite link is off.</p>'; return; }
     const msg = buddiesMessage(code);
     $('#joinShare').innerHTML = `<div class="secret">${esc(`${location.origin}/join/${encodeURIComponent(code)}`)}</div>${shareButtons(msg)}`;
@@ -656,7 +672,7 @@ function wireMore() {
   const drawAnnounce = () => {
     const s = S.byId.get(Number($('#announceSong').value));
     if (!s) { $('#announceShare').innerHTML = '<p class="muted" style="margin:0">No songs yet.</p>'; return; }
-    const msg = newSongMessage(s);
+    const msg = newSongMessage(s, inviteCode);
     $('#announceShare').innerHTML = shareButtons(msg);
     $('#announceShare [data-copy]').onclick = () => copyText(msg);
   };
@@ -747,14 +763,17 @@ function buddiesMessage(code) {
     'Happy Listening !!',
   ].join('\n');
 }
-function newSongMessage(s) {
+// With the invite link switched on, the song link goes through it, so friends who aren't in the
+// app yet get in with the same tap (anyone already signed in just keeps their account).
+function newSongMessage(s, code) {
+  const link = `${location.origin}${code ? `/join/${encodeURIComponent(code)}` : '/'}?song=${s.id}`;
   return [
     "🎵 *New on Narendra's Musicbox*",
     '',
     `*${s.title}*`,
     s.credits || s.artist,
     '',
-    `Tap to play: ${location.origin}/?song=${s.id}`,
+    `Tap to play: ${link}`,
     '',
     'Happy Listening !!',
   ].join('\n');
