@@ -16,7 +16,7 @@ function ago(t) {
 }
 const hours = (sec) => (sec < 3600 ? `${Math.round(sec / 60)} min` : `${(sec / 3600).toFixed(1)} hr`);
 const KIND = {
-  play_error: 'Song would not play', stall: 'Long buffering', upload_failed: 'Upload failed', js_error: 'App error',
+  play_error: 'Song would not play', stall: 'Long buffering', upload_failed: 'Upload failed', js_error: 'App error', server_error: 'Server error',
   login_wrong_password: 'Wrong password', login_unknown_user: 'Unknown username', login_bad_invite: 'Old / wrong invite link',
 };
 const device = (ua = '') => {

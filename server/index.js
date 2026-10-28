@@ -393,8 +393,14 @@ app.post('/api/rescan', requireAdmin, wrap(async (req, res) => res.json(await sc
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => {
   if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: `File is bigger than ${MAX_UPLOAD_MB} MB` });
-  if (!err.status) console.error(err);
-  res.status(err.status || 500).json({ error: err.status ? err.message : 'Something went wrong' });
+  if (!err.status) {
+    console.error(err);
+    // Also keep the real reason in the admin trouble log, so it can be read from a phone without the server's log file.
+    try { logProblem({ userId: req.user?.id ?? null, kind: 'server_error', detail: `${req.method} ${req.path}: ${err.code || ''} ${err.message}`.replace(/\s+/g, ' '), req }); } catch {}
+  }
+  // Only the admin sees the technical reason on screen; everyone else gets the plain message.
+  const reason = !err.status && req.user?.is_admin ? ` (${err.code || ''} ${err.message})`.replace(/\s+/g, ' ').slice(0, 200) : '';
+  res.status(err.status || 500).json({ error: err.status ? err.message : `Something went wrong${reason}` });
 });
 
 // ---------- app shell ----------
