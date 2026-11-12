@@ -13,6 +13,8 @@ main() {
   local ROOT=/srv/musicbox
   local APP=$ROOT/app STATE=$ROOT/deployed.txt SKIP=$ROOT/failed.txt LOG=$ROOT/logs/update.log WORK=$ROOT/releases
   local API=(-fsSL -H 'User-Agent: musicbox-updater' -H 'Accept: application/vnd.github+json')
+  exec 9> /run/musicbox-update.lock
+  flock -n 9 || return   # a deploy is already running
   log() { echo "$(date '+%F %T')  $*" >> "$LOG"; }
   app_ok() {
     for _ in $(seq 30); do

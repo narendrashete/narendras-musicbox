@@ -33,7 +33,6 @@ fi
 cp "$HERE"/musicbox*.service "$HERE"/musicbox*.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable musicbox.service
-systemctl enable --now musicbox-update.timer musicbox-backup.timer
 
 # Caddy site block, kept between markers so a re-run replaces it.
 CF=/etc/caddy/Caddyfile
@@ -53,6 +52,7 @@ caddy validate --adapter caddyfile --config "$CF.new" >/dev/null
 mv "$CF.new" "$CF"
 systemctl reload caddy
 
-# First install: deploy the newest green commit on main now instead of waiting for the timer.
+# First install: deploy the newest green commit on main now (the timers run scripts from the app folder).
 [ -s "$ROOT/deployed.txt" ] || bash "$HERE/update.sh"
+systemctl enable --now musicbox-update.timer musicbox-backup.timer
 echo "Done. Live commit: $(cat "$ROOT/deployed.txt" 2>/dev/null || echo none) - log: $ROOT/logs/update.log"
