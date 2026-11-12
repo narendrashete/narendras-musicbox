@@ -1,0 +1,21 @@
+# Narendra's Musicbox: Node on 127.0.0.1:4300, behind Caddy. Developed by Prime Computers.
+[Unit]
+Description=Narendra's Musicbox
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=musicbox
+Group=musicbox
+WorkingDirectory=/srv/musicbox/app
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning server/index.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/srv/musicbox/data /srv/musicbox/library /srv/musicbox/logs
+
+[Install]
+WantedBy=multi-user.target

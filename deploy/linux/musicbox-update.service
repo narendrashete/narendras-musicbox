@@ -1,0 +1,9 @@
+# Auto-deploy of green commits on main (see update.sh). Developed by Prime Computers.
+[Unit]
+Description=Musicbox auto-deploy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /srv/musicbox/app/deploy/linux/update.sh

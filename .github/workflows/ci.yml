@@ -45,6 +45,9 @@ jobs:
           test "$(check -X POST -H 'Content-Type: application/json' -d '{"username":"x","password":"y"}' http://127.0.0.1:4300/api/login | tail -1)" = 401
           cat server.log
 
+      - name: Linux deploy scripts parse
+        run: for f in deploy/linux/*.sh; do bash -n "$f"; done
+
       - name: PowerShell scripts parse
         shell: pwsh
         run: |

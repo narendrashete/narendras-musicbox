@@ -1,0 +1,11 @@
+# OneDrive backup of the song library (see backup.sh). Developed by Prime Computers.
+[Unit]
+Description=Musicbox OneDrive backup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=musicbox
+Group=musicbox
+ExecStart=/bin/bash /srv/musicbox/app/deploy/linux/backup.sh
