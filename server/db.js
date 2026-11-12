@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-// Node's built-in SQLite: no native npm module to compile (the Windows server has no build tools).
+// Node's built-in SQLite: no native npm module to compile.
 import { DatabaseSync } from 'node:sqlite';
 import { DB_PATH } from './config.js';
 

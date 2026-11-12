@@ -286,7 +286,7 @@ app.get('/api/admin/health', requireAdmin, wrap(async (req, res) => {
     out.disk = { freeGB: +(st.bavail * st.bsize / 1e9).toFixed(1), totalGB: +(st.blocks * st.bsize / 1e9).toFixed(1) };
   } catch {}
 
-  // The OneDrive backup job (Musicbox-Sync) writes this file after every run.
+  // The OneDrive backup job (deploy/linux/backup.sh) writes this file after every run.
   const syncFile = process.env.SYNC_STATUS_FILE || path.join(path.dirname(DB_PATH), '..', 'logs', 'sync-status.json');
   try {
     const b = JSON.parse(fs.readFileSync(syncFile, 'utf8').replace(/^\uFEFF/, ''));

@@ -3,7 +3,7 @@
 Personal music streaming app. It's a PWA, so it installs on Android ("Install app") and iPhone
 (Safari → Share → "Add to Home Screen") from the same web address, with no app store involved.
 
-- **Library** lives on the server's own disk (`C:\Musicbox\library\<Artist>\<Title>.mp3`) and is backed up to OneDrive (`Narendras musicbox`) every 15 minutes
+- **Library** lives on the server's own disk (`/srv/musicbox/library/<Artist>/<Title>.mp3`) and is backed up to OneDrive (`Narendras musicbox`) every 15 minutes
 - **Streaming**: songs play over HTTP Range requests, so the phone only buffers what it's
   about to play and nothing is saved on the phone. The app shell is cached; songs never are.
 - **Favourites** per user. **Categories** (Comedy, Dance, Spiritual…) are created by the admin
@@ -53,32 +53,37 @@ npm start                   # http://localhost:4300
 
 ## Hosting
 
-Live at **https://musicbox.narendrashete.com** on a Windows Server (IIS) box:
-- Songs are stored in `C:\Musicbox\library` on the server, so playback never depends on OneDrive.
-  Task `Musicbox-Sync` ([run-sync.ps1](deploy/windows-server/run-sync.ps1)) copies new songs to the OneDrive
-  folder `Narendras musicbox` every 15 minutes (copy only, it never deletes). It uses its own rclone login,
-  which can expire; if so the backup stops but playback is unaffected. The admin **Health check** page
-  (`/health.html`) shows the last backup result, free disk space and any missing song files.
-- Moving an existing install from the old OneDrive mount (`M:`): run
-  [migrate-to-local.ps1](deploy/windows-server/migrate-to-local.ps1) once as administrator. `setup.ps1` is the
-  original installer and still sets up the `M:` mount, so don't re-run it on a migrated server.
-- To add songs: use the Upload tab, or copy MP3s into `C:\Musicbox\library` and press *Rescan* on the Upload tab.
-- Node on `127.0.0.1:4300`, behind an IIS site (URL Rewrite + ARR) with a Let's Encrypt cert from win-acme.
-- Both run as SYSTEM startup tasks `Musicbox-Mount` / `Musicbox-App`; logs in `C:\Musicbox\logs`.
+Live at **https://musicbox.narendrashete.com** on the `prime-dev` Ubuntu 24.04 VPS (moved from the old
+Windows server on 2026-11-12). Everything lives in `/srv/musicbox` and runs as the `musicbox` user:
 
-**CI/CD**: every push runs [CI](.github/workflows/ci.yml) (install, syntax check, a smoke test that
-boots the server, and a parse check of the PowerShell deploy scripts). On the server, the task
-`Musicbox-Update` ([update.ps1](deploy/windows-server/update.ps1)) checks GitHub every 5 minutes.
-When `main` has a new commit whose checks passed, it downloads it, installs it, restarts the app,
-and rolls back automatically if the new version doesn't start. It's pull-based: the server only
-makes outbound calls to GitHub, with no open ports and no GitHub runner on the box. The log is
-`C:\Musicbox\logs\update.log`, and `C:\Musicbox\deployed.txt` holds the live commit. So to ship
-a change, just push to `main`.
+- `app/` (code + `.env`), `data/musicbox.db`, `library/` (the songs), `logs/`, `rclone.conf` (OneDrive login).
+- Service `musicbox` = Node on `127.0.0.1:4300`, behind Caddy, which also gets and renews the HTTPS cert
+  (site block between the `# >>> musicbox` markers in `/etc/caddy/Caddyfile`).
+  Logs: `journalctl -u musicbox`. Restart: `sudo systemctl restart musicbox`.
+- To add songs: use the Upload tab, or copy MP3s into `/srv/musicbox/library` (owned by `musicbox`) and press
+  *Rescan* on the Upload tab.
 
-First install (once): extract `dist/musicbox-deploy.zip` (code + `initial-data/musicbox.db`, built
-locally) into `C:\Musicbox` so you get `C:\Musicbox\app`. Then in an admin PowerShell run
-`deploy\windows-server\setup.ps1 -Check` (read-only), then `setup.ps1 -Email <you>`. It's safe to
-re-run, and it never overwrites the live DB in `C:\Musicbox\data`.
+**OneDrive backup**: timer `musicbox-backup` ([backup.sh](deploy/linux/backup.sh)) copies new songs to the
+OneDrive folder `Narendras musicbox` every 15 minutes (copy only, it never deletes, so renamed or deleted
+songs keep their old copy there). The admin **Health check** page (`/health.html`) shows the last backup
+result, free disk space and any missing song files. If the OneDrive login expires, run
+`rclone authorize "onedrive"` on a PC with a browser, then on the server
+`sudo -u musicbox rclone --config /srv/musicbox/rclone.conf config reconnect musicbox:`, answer **n** to
+the browser question and paste the token.
+
+**CI/CD**: every push runs [CI](.github/workflows/ci.yml) (install, syntax check, a smoke test that boots
+the server, and a syntax check of the deploy scripts). On the server, timer `musicbox-update`
+([update.sh](deploy/linux/update.sh)) checks GitHub every 5 minutes. When `main` has a new commit whose
+checks passed, it downloads it, installs packages, swaps it in, and rolls back automatically if the new
+version doesn't start. It's pull-based: the server only makes outbound calls to GitHub, with no GitHub
+runner on the box (the repo is public, so a runner there would let fork PRs run code on it). The log is
+`/srv/musicbox/logs/update.log` and `/srv/musicbox/deployed.txt` holds the live commit. So to ship a
+change, just push to `main`.
+
+**New install**: `sudo bash deploy/linux/setup.sh "<hostname>"` from a clone. It installs Node 24, rclone and
+the systemd units, adds the Caddy site and deploys the newest green commit. It's safe to re-run and never
+touches the data, the songs or an existing `.env`. Then copy in `data/musicbox.db`, the songs and
+`rclone.conf`, and set `JWT_SECRET` in `app/.env` (keeping the old one keeps everyone signed in).
 
 ---
 Developed by [Prime Computers](https://www.primecomputers.co.in)

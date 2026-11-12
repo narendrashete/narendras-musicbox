@@ -33,8 +33,8 @@ fetch('/api/admin/health').then(async (r) => {
   const b = h.backup;
   const stale = b && b.ageMin > 60;
   html += b
-    ? row(b.ok && !stale, 'OneDrive backup', b.ok ? `Last ran ${b.ageMin < 90 ? `${b.ageMin} min` : `${Math.round(b.ageMin / 60)} hr`} ago${stale ? ' - <b>overdue, the backup task may have stopped</b>' : ' and succeeded'}` : `Last run <b>failed</b>${b.error ? `:<br>${esc(b.error)}` : ''}${/invalid_grant|token/i.test(b.error) ? '<br><b>The OneDrive login has expired - run: rclone config reconnect musicbox:</b>' : ''}`)
-    : row(false, 'OneDrive backup', 'No backup has run yet (this is normal until the Musicbox-Sync task is set up)');
+    ? row(b.ok && !stale, 'OneDrive backup', b.ok ? `Last ran ${b.ageMin < 90 ? `${b.ageMin} min` : `${Math.round(b.ageMin / 60)} hr`} ago${stale ? ' - <b>overdue, the backup task may have stopped</b>' : ' and succeeded'}` : `Last run <b>failed</b>${b.error ? `:<br>${esc(b.error)}` : ''}${/invalid_grant|token/i.test(b.error) ? '<br><b>The OneDrive login has expired - see "OneDrive backup" in the README to log in again</b>' : ''}`)
+    : row(false, 'OneDrive backup', 'No backup has run yet (this is normal until the musicbox-backup timer is set up)');
   html += row(!!t?.ok, 'Read test (one song)', t ? (t.ok ? `"${esc(t.title)}" · read ${t.bytes} bytes in ${t.ms} ms · detected type ${esc(t.type || 'unknown')}` : `"${esc(t.title)}" — ${esc(t.error)}`) : 'No readable song to test');
   document.getElementById('main').innerHTML = html;
 }).catch((e) => { document.getElementById('main').innerHTML = row(false, 'Could not run the check', esc(e.message)); });

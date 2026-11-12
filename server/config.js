@@ -2,7 +2,7 @@ import path from 'node:path';
 import os from 'node:os';
 import dotenv from 'dotenv';
 
-// App root, so the server works the same whatever folder it's started from (e.g. as a Windows task).
+// App root, so the server works the same whatever folder it's started from (e.g. as a systemd service).
 export const APP_DIR = path.join(import.meta.dirname, '..');
 dotenv.config({ path: path.join(APP_DIR, '.env') });
 
